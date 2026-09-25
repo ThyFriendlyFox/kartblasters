@@ -37,7 +37,7 @@ export class Game {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     document.getElementById('game').appendChild(renderer.domElement);
     this.canvas = renderer.domElement;
 
@@ -261,9 +261,22 @@ export class Game {
 
   bindNet() {
     const net = this.net;
-    net.on('msg', (m, from) => this.onMsg(m, from));
+    net.on('msg', (m, from) => {
+      this.lastHostMsg = performance.now();
+      this.onMsg(m, from);
+    });
     net.on('leave', (id) => this.removePlayer(id));
     net.on('closed', () => this.endGame('Host left the game', 'The room has closed.'));
+    if (net.offline) return;
+    // Heartbeat on a timer so guests can detect a vanished host quickly
+    // (WebRTC can take ~30s to notice), and keep going while the host tab is hidden.
+    this.lastHostMsg = performance.now();
+    setInterval(() => {
+      if (net.isHost) net.send({ t: 'ping' });
+      else if (this.joined && performance.now() - this.lastHostMsg > 10000) {
+        this.endGame('Lost connection to host', 'The host left or their connection dropped.');
+      }
+    }, 1000);
   }
 
   onMsg(m, from) {
