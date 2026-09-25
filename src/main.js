@@ -1,9 +1,13 @@
+import { inject } from '@vercel/analytics';
 import { Net } from './net.js';
 import { Game, COLORS } from './game.js';
 import { RaceGame } from './race.js';
 import { Sfx } from './audio.js';
 import { CARS, CAR_IDS, carThumbnail } from './cars.js';
 import { TRACKS, TRACK_IDS } from './trackdefs.js';
+
+// Initialize Vercel Analytics
+inject();
 
 const $ = (id) => document.getElementById(id);
 
