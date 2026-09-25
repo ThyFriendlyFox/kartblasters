@@ -1,5 +1,3 @@
-import { MAX_HP } from './kart.js';
-
 const $ = (id) => document.getElementById(id);
 
 function esc(s) {
@@ -48,9 +46,10 @@ export class Hud {
 
   stats(k, speed) {
     const hp = Math.max(0, Math.round(k.hp));
-    this.set('hpw', this.el.hpFill, 'width', `${(hp / MAX_HP) * 100}%`);
+    this.set('hpw', this.el.hpFill, 'width', `${(hp / k.maxHp) * 100}%`);
     this.set('hpt', this.el.hpText, 'text', `${hp}`);
-    this.el.hpFill.style.background = hp > 50 ? '#4ade80' : hp > 25 ? '#facc15' : '#ef4444';
+    const f = hp / k.maxHp;
+    this.el.hpFill.style.background = f > 0.5 ? '#4ade80' : f > 0.25 ? '#facc15' : '#ef4444';
     this.set('boost', this.el.boostFill, 'width', `${Math.round(k.boost * 100)}%`);
     this.set('heat', this.el.heatFill, 'width', `${Math.round(Math.min(1, k.heat) * 100)}%`);
     this.el.heatFill.classList.toggle('over', k.overheated);

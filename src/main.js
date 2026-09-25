@@ -1,6 +1,9 @@
 import { Net } from './net.js';
 import { Game, COLORS } from './game.js';
+import { RaceGame } from './race.js';
 import { Sfx } from './audio.js';
+import { CARS, CAR_IDS, carThumbnail } from './cars.js';
+import { TRACKS, TRACK_IDS } from './trackdefs.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,9 +22,44 @@ const store = {
   },
 };
 
+const MAPS = {
+  race: TRACK_IDS.map((id) => [id, `${TRACKS[id].name} — ${TRACKS[id].desc}`]),
+  battle: [['stadium', 'Stadium — arena with cover, jump pads and pickups']],
+};
+
 let color = store.get('kb-color', COLORS[Math.floor(Math.random() * COLORS.length)]);
 if (!COLORS.includes(color)) color = COLORS[0];
+let car = store.get('kb-car', 'hyper');
+if (!CARS[car]) car = 'hyper';
+let mode = store.get('kb-mode', 'race') === 'battle' ? 'battle' : 'race';
 $('name').value = store.get('kb-name', '');
+
+// ---- car picker (thumbnails are re-rendered in the chosen color)
+const carPick = $('carPick');
+const carBtns = {};
+for (const id of CAR_IDS) {
+  const b = document.createElement('button');
+  b.className = 'carBtn';
+  b.innerHTML = `<img alt="" /><span>${CARS[id].name}</span><small>${CARS[id].desc}</small>`;
+  b.onclick = () => {
+    car = id;
+    refreshCars();
+  };
+  carPick.appendChild(b);
+  carBtns[id] = b;
+}
+function refreshCars(redraw = false) {
+  for (const id of CAR_IDS) {
+    carBtns[id].classList.toggle('on', id === car);
+    if (redraw) {
+      try {
+        carBtns[id].querySelector('img').src = carThumbnail(id, color);
+      } catch {
+        // WebGL unavailable: the names still work
+      }
+    }
+  }
+}
 
 const swatches = $('colors');
 for (const c of COLORS) {
@@ -32,9 +70,28 @@ for (const c of COLORS) {
   b.onclick = () => {
     color = c;
     for (const s of swatches.children) s.classList.toggle('on', s === b);
+    refreshCars(true);
   };
   swatches.appendChild(b);
 }
+refreshCars(true);
+
+// ---- mode / map
+function refreshMode() {
+  for (const b of $('modeSeg').children) b.classList.toggle('on', b.dataset.mode === mode);
+  const prev = store.get(`kb-map-${mode}`, MAPS[mode][0][0]);
+  $('map').innerHTML = MAPS[mode].map(([id, label]) => `<option value="${id}"${id === prev ? ' selected' : ''}>${label}</option>`).join('');
+  $('lapsWrap').classList.toggle('hidden', mode !== 'race');
+  $('ctlRace').classList.toggle('hidden', mode !== 'race');
+  $('ctlBattle').classList.toggle('hidden', mode !== 'battle');
+}
+for (const b of $('modeSeg').children) {
+  b.onclick = () => {
+    mode = b.dataset.mode;
+    refreshMode();
+  };
+}
+refreshMode();
 
 const params = new URLSearchParams(location.search);
 if (params.get('room')) {
@@ -54,17 +111,25 @@ function playerInfo() {
   const name = $('name').value.trim().slice(0, 16) || `Racer${Math.floor(Math.random() * 900 + 100)}`;
   store.set('kb-name', name);
   store.set('kb-color', color);
-  return { name, color };
+  store.set('kb-car', car);
+  store.set('kb-mode', mode);
+  store.set(`kb-map-${mode}`, $('map').value);
+  return { name, color, car };
 }
 
 const sfx = new Sfx();
 
-function start(net, code, botCount) {
+function start(net, code, opts) {
   $('menu').classList.add('hidden');
-  const { name, color } = playerInfo();
-  const game = new Game({ net, name, color, botCount, sfx, code });
+  const info = playerInfo();
+  const args = { net, sfx, code, ...info, ...opts };
+  const game = opts.mode === 'race' ? new RaceGame(args) : new Game(args);
   window.__game = game;
   if (code) history.replaceState(null, '', `?room=${code}`);
+}
+
+function hostOpts() {
+  return { mode, map: $('map').value, botCount: +$('bots').value, laps: +$('laps').value };
 }
 
 $('host').onclick = async () => {
@@ -74,7 +139,7 @@ $('host').onclick = async () => {
   const net = new Net();
   try {
     const code = await net.hostGame();
-    start(net, code, +$('bots').value);
+    start(net, code, hostOpts());
   } catch (e) {
     console.error(e);
     status(`Could not create room: ${e.message || e.type || e}`, true);
@@ -94,9 +159,23 @@ $('join').onclick = async () => {
   const net = new Net();
   try {
     await net.joinGame(code);
-    start(net, code, 0);
+    status('Connected! Getting the room info…');
+    // The host tells us which mode and map the room is using
+    const welcome = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('The host did not respond.')), 10000);
+      net.on('msg', (m) => {
+        if (m.t === 'welcome') {
+          clearTimeout(timer);
+          resolve(m);
+        }
+      });
+      const { name, color, car } = playerInfo();
+      net.send({ t: 'hello', name, color, car });
+    });
+    start(net, code, { mode: welcome.mode, map: welcome.map, laps: welcome.laps, welcome });
   } catch (e) {
     console.error(e);
+    net.destroy();
     status(e.message || 'Could not connect.', true);
     busy(false);
   }
@@ -108,5 +187,6 @@ $('practice').onclick = () => {
   sfx.init();
   const net = new Net();
   net.startOffline();
-  start(net, null, +$('bots').value || 4);
+  const o = hostOpts();
+  start(net, null, { ...o, botCount: o.botCount || 3 });
 };

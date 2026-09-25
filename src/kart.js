@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { collideWorld } from './arena.js';
+import { buildCar, CARS } from './cars.js';
 
 export const KART_RADIUS = 1.6;
 export const MAX_HP = 100;
@@ -32,8 +33,11 @@ function makeTagCanvas() {
 }
 
 export class Kart {
-  constructor(scene, { id, name, color, local = false, bot = false }) {
+  constructor(scene, { id, name, color, car = 'hyper', local = false, bot = false }) {
     this.id = id;
+    this.carType = CARS[car] ? car : 'hyper';
+    this.stats = CARS[this.carType];
+    this.maxHp = this.stats.hp;
     this.name = name;
     this.color = color;
     this.local = local;
@@ -48,7 +52,7 @@ export class Kart {
     this.steerVis = 0;
     this.wheelSpin = 0;
 
-    this.hp = MAX_HP;
+    this.hp = this.maxHp;
     this.alive = false;
     this.boost = 1;
     this.boosting = false;
@@ -78,15 +82,15 @@ export class Kart {
 
   buildMesh() {
     const root = new THREE.Group();
-    const body = new THREE.Group();
-    root.add(body);
+    const car = buildCar(this.carType, this.color);
+    root.add(car.group);
+    const body = car.body;
+    this.wheels = car.wheels;
+    this.frontPivots = car.frontPivots;
+    this.flames = car.flames;
 
-    const paint = new THREE.MeshStandardMaterial({ color: this.color, roughness: 0.35, metalness: 0.3 });
     const dark = new THREE.MeshStandardMaterial({ color: '#222428', roughness: 0.8 });
-    const chrome = new THREE.MeshStandardMaterial({ color: '#c9ced6', roughness: 0.2, metalness: 0.9 });
-    const rubber = new THREE.MeshStandardMaterial({ color: '#111', roughness: 0.9 });
-
-    const add = (geo, mat, x, y, z, parent = body) => {
+    const add = (geo, mat, x, y, z, parent) => {
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x, y, z);
       m.castShadow = true;
@@ -94,67 +98,9 @@ export class Kart {
       return m;
     };
 
-    // Chassis
-    add(new THREE.BoxGeometry(2.0, 0.35, 3.4), paint, 0, 0.5, 0);
-    add(new THREE.BoxGeometry(1.3, 0.3, 1.1), paint, 0, 0.62, 1.75);
-    add(new THREE.BoxGeometry(2.4, 0.25, 0.5), dark, 0, 0.45, 2.3); // front bumper
-    add(new THREE.BoxGeometry(2.3, 0.3, 0.4), dark, 0, 0.55, -1.85); // rear bumper
-    add(new THREE.BoxGeometry(0.4, 0.45, 1.8), paint, 1.05, 0.65, -0.1); // side pods
-    add(new THREE.BoxGeometry(0.4, 0.45, 1.8), paint, -1.05, 0.65, -0.1);
-    add(new THREE.BoxGeometry(1.0, 0.8, 0.25), dark, 0, 1.05, -0.75); // seat back
-    // Steering wheel
-    const sw = add(new THREE.TorusGeometry(0.28, 0.06, 6, 14), dark, 0, 1.05, 0.55);
-    sw.rotation.x = -0.9;
-    // Exhausts
-    add(new THREE.CylinderGeometry(0.12, 0.12, 0.6, 8), chrome, 0.45, 0.7, -2.0).rotation.x = Math.PI / 2;
-    add(new THREE.CylinderGeometry(0.12, 0.12, 0.6, 8), chrome, -0.45, 0.7, -2.0).rotation.x = Math.PI / 2;
-
-    // Driver
-    add(new THREE.CylinderGeometry(0.35, 0.42, 0.8, 10), new THREE.MeshStandardMaterial({ color: '#30343b' }), 0, 1.15, -0.35);
-    const helmet = add(new THREE.SphereGeometry(0.38, 16, 12), paint, 0, 1.75, -0.3);
-    helmet.scale.set(1, 1.05, 1.1);
-    const visor = add(
-      new THREE.SphereGeometry(0.3, 12, 8, -Math.PI / 2.4, Math.PI / 1.2, Math.PI / 3, Math.PI / 3),
-      new THREE.MeshStandardMaterial({ color: '#111a22', roughness: 0.05, metalness: 0.8 }),
-      0, 1.75, -0.22,
-    );
-    visor.scale.set(1.3, 1.3, 1.3);
-
-    // Wheels
-    this.wheels = [];
-    this.frontPivots = [];
-    const wheelGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.45, 16);
-    wheelGeo.rotateZ(Math.PI / 2);
-    const hubGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.47, 8);
-    hubGeo.rotateZ(Math.PI / 2);
-    for (const [x, z, front] of [[1.25, 1.3, true], [-1.25, 1.3, true], [1.3, -1.3, false], [-1.3, -1.3, false]]) {
-      const pivot = new THREE.Group();
-      pivot.position.set(x, 0.45, z);
-      body.add(pivot);
-      const wheel = new THREE.Mesh(wheelGeo, rubber);
-      wheel.castShadow = true;
-      wheel.add(new THREE.Mesh(hubGeo, chrome));
-      if (!front) wheel.scale.set(1.25, 1.1, 1.1);
-      pivot.add(wheel);
-      this.wheels.push(wheel);
-      if (front) this.frontPivots.push(pivot);
-    }
-
-    // Boost flames
-    const flameMat = new THREE.MeshBasicMaterial({ color: '#ffb703', transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
-    this.flames = [];
-    for (const x of [0.45, -0.45]) {
-      const f = new THREE.Mesh(new THREE.ConeGeometry(0.2, 1.2, 8), flameMat);
-      f.rotation.x = -Math.PI / 2;
-      f.position.set(x, 0.7, -2.8);
-      f.visible = false;
-      body.add(f);
-      this.flames.push(f);
-    }
-
     // Turret (follows aim, independent from the chassis)
     const turret = new THREE.Group();
-    turret.position.set(0, 2.25, 0);
+    turret.position.set(0, car.roofY + 0.15, 0);
     root.add(turret);
     add(new THREE.CylinderGeometry(0.35, 0.45, 0.3, 12), dark, 0, 0, 0, turret);
     const barrel = new THREE.Group();
@@ -164,8 +110,7 @@ export class Kart {
     b1.rotation.x = Math.PI / 2;
     const b2 = add(new THREE.CylinderGeometry(0.12, 0.14, 1.5, 10), bmat, -0.16, 0.1, 0.7, barrel);
     b2.rotation.x = Math.PI / 2;
-    const tip = add(new THREE.BoxGeometry(0.6, 0.2, 0.2), paint, 0, 0.1, 1.4, barrel);
-    tip.material = new THREE.MeshBasicMaterial({ color: this.color });
+    add(new THREE.BoxGeometry(0.6, 0.2, 0.2), new THREE.MeshBasicMaterial({ color: this.color }), 0, 0.1, 1.4, barrel);
     this.muzzle = new THREE.Object3D();
     this.muzzle.position.set(0, 0.1, 1.6);
     barrel.add(this.muzzle);
@@ -186,7 +131,7 @@ export class Kart {
       this.tagTex.colorSpace = THREE.SRGBColorSpace;
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tagTex, depthTest: false, transparent: true }));
       sprite.scale.set(5, 1.4, 1);
-      sprite.position.y = 3.6;
+      sprite.position.y = car.roofY + 1.6;
       sprite.renderOrder = 10;
       root.add(sprite);
       this.tag = sprite;
@@ -217,7 +162,7 @@ export class Kart {
     g.fillText(this.name, 128, 32);
     g.fillStyle = 'rgba(0,0,0,0.6)';
     g.fillRect(48, 46, 160, 16);
-    const f = Math.max(0, this.hp) / MAX_HP;
+    const f = Math.max(0, this.hp) / this.maxHp;
     g.fillStyle = f > 0.5 ? '#4ade80' : f > 0.25 ? '#facc15' : '#ef4444';
     g.fillRect(50, 48, 156 * f, 12);
     this.tagTex.needsUpdate = true;
@@ -237,7 +182,7 @@ export class Kart {
     this.heading = s.yaw;
     this.aimYaw = s.yaw;
     this.aimPitch = 0;
-    this.hp = MAX_HP;
+    this.hp = this.maxHp;
     this.alive = true;
     this.boost = 1;
     this.heat = 0;
@@ -268,9 +213,10 @@ export class Kart {
     const control = this.onGround ? 1 : 0.25;
 
     // Throttle / brake
-    const top = this.boosting ? BOOST_SPEED : MAX_SPEED;
+    const st = this.stats;
+    const top = (this.boosting ? BOOST_SPEED : MAX_SPEED) * st.speed;
     if (input.throttle > 0) {
-      if (vF < top) vF += (this.boosting ? 62 : 34) * input.throttle * dt * control;
+      if (vF < top) vF += (this.boosting ? 62 : 34) * st.accel * input.throttle * dt * control;
     } else if (input.throttle < 0) {
       if (vF > 0.5) vF -= 48 * dt * control;
       else if (vF > -REVERSE_SPEED) vF -= 22 * dt * control;
@@ -283,12 +229,12 @@ export class Kart {
 
     // Steering scales with speed (can't spin in place)
     const speedFactor = Math.max(-1, Math.min(1, vF / 8));
-    const turnRate = 2.5 * (this.drifting ? 1.4 : 1) * (this.boosting ? 0.8 : 1);
+    const turnRate = 2.5 * st.grip * (this.drifting ? 1.4 : 1) * (this.boosting ? 0.8 : 1);
     this.heading += input.steer * turnRate * speedFactor * dt * (this.onGround ? 1 : 0.4);
     this.steerVis += (input.steer - this.steerVis) * Math.min(1, dt * 10);
 
     // Lateral grip: low while drifting so the kart slides
-    const grip = this.onGround ? (this.drifting ? 1.6 : 10) : 0.3;
+    const grip = this.onGround ? (this.drifting ? 1.6 : 10 * st.grip) : 0.3;
     const keep = Math.exp(-grip * dt);
     latX *= keep;
     latZ *= keep;

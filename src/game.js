@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { buildArena, pointBlocked } from './arena.js';
-import { Kart, MAX_HP } from './kart.js';
+import { Kart } from './kart.js';
+import { CAR_IDS } from './cars.js';
 import { Fx } from './fx.js';
 import { BotBrain, BOT_NAMES } from './bots.js';
 import { Hud } from './hud.js';
@@ -27,7 +28,7 @@ const _dir = new THREE.Vector3();
 const Z = new THREE.Vector3(0, 0, 1);
 
 export class Game {
-  constructor({ net, name, color, botCount, sfx, code }) {
+  constructor({ net, name, color, car, botCount, sfx, code, welcome }) {
     this.net = net;
     this.sfx = sfx;
     this.code = code;
@@ -61,9 +62,9 @@ export class Game {
     this.joined = net.isHost;
     this.gameOver = false;
 
-    this.me = new Kart(this.scene, { id: net.myId, name, color, local: true });
+    this.me = new Kart(this.scene, { id: net.myId, name, color, car, local: true });
     this.karts.set(net.myId, this.me);
-    this.players.set(net.myId, { name, color, kills: 0, deaths: 0, bot: false });
+    this.players.set(net.myId, { name, color, car, kills: 0, deaths: 0, bot: false });
 
     this.buildItems();
     this.bindInput();
@@ -72,9 +73,8 @@ export class Game {
     if (net.isHost) {
       for (let i = 0; i < botCount; i++) this.addBot(i);
       this.spawnKart(this.me);
-    } else {
-      this.hud.center('Joining…', 'Connecting to host', 0);
-      net.send({ t: 'hello', name, color });
+    } else if (welcome) {
+      this.onMsg(welcome, welcome.i);
     }
 
     this.hud.show();
@@ -136,18 +136,19 @@ export class Game {
     const name = BOT_NAMES[i % BOT_NAMES.length];
     const palette = COLORS.filter((c) => c !== this.me.color);
     const color = palette[(i + 2) % palette.length];
-    const kart = new Kart(this.scene, { id, name, color, bot: true });
+    const car = CAR_IDS[Math.floor(Math.random() * CAR_IDS.length)];
+    const kart = new Kart(this.scene, { id, name, color, car, bot: true });
     this.karts.set(id, kart);
-    this.players.set(id, { name, color, kills: 0, deaths: 0, bot: true });
+    this.players.set(id, { name, color, car, kills: 0, deaths: 0, bot: true });
     this.bots.push({ kart, brain: new BotBrain(this.world) });
     this.spawnKart(kart);
   }
 
-  addPlayer(id, name, color, bot = false, kills = 0, deaths = 0) {
+  addPlayer(id, name, color, car, bot = false, kills = 0, deaths = 0) {
     name = String(name || 'Racer').slice(0, 16);
     color = /^#[0-9a-f]{6}$/i.test(color) ? color : '#ffffff';
-    this.players.set(id, { name, color, kills, deaths, bot });
-    if (!this.karts.has(id)) this.karts.set(id, new Kart(this.scene, { id, name, color }));
+    this.players.set(id, { name, color, car, kills, deaths, bot });
+    if (!this.karts.has(id)) this.karts.set(id, new Kart(this.scene, { id, name, color, car }));
   }
 
   removePlayer(id) {
@@ -285,21 +286,23 @@ export class Game {
     switch (m.t) {
       case 'hello': {
         if (!host) return;
-        this.addPlayer(from, m.name, m.color);
+        this.addPlayer(from, m.name, m.color, m.car);
         const p = this.players.get(from);
         this.net.sendTo(from, {
           t: 'welcome',
-          players: [...this.players.entries()].map(([id, q]) => [id, q.name, q.color, q.bot ? 1 : 0, q.kills, q.deaths]),
+          mode: 'battle',
+          map: 'stadium',
+          players: [...this.players.entries()].map(([id, q]) => [id, q.name, q.color, q.car, q.bot ? 1 : 0, q.kills, q.deaths]),
           items: [...this.items.values()].map((it) => [it.id, it.active ? 1 : 0]),
         });
-        this.net.sendExcept(from, { t: 'pj', id: from, name: p.name, color: p.color });
+        this.net.sendExcept(from, { t: 'pj', id: from, name: p.name, color: p.color, car: p.car });
         this.hud.feed(`<span style="color:${esc(p.color)}">${esc(p.name)}</span> joined`);
         break;
       }
       case 'welcome': {
-        for (const [id, name, color, bot, kills, deaths] of m.players) {
+        for (const [id, name, color, car, bot, kills, deaths] of m.players) {
           if (id === this.me.id) continue;
-          this.addPlayer(id, name, color, !!bot, kills, deaths);
+          this.addPlayer(id, name, color, car, !!bot, kills, deaths);
         }
         for (const [id, active] of m.items) {
           const it = this.items.get(id);
@@ -311,7 +314,7 @@ export class Game {
       }
       case 'pj':
         if (m.id !== this.me.id) {
-          this.addPlayer(m.id, m.name, m.color);
+          this.addPlayer(m.id, m.name, m.color, m.car);
           const p = this.players.get(m.id);
           this.hud.feed(`<span style="color:${esc(p.color)}">${esc(p.name)}</span> joined`);
         }
@@ -646,7 +649,7 @@ export class Game {
         if (!k.alive) continue;
         const dx = k.pos.x - it.x, dz = k.pos.z - it.z;
         if (dx * dx + dz * dz > 2.8 * 2.8 || k.pos.y > 4) continue;
-        if (it.type === 'health' && k.hp >= MAX_HP) continue;
+        if (it.type === 'health' && k.hp >= k.maxHp) continue;
         if (this.net.isHost) this.hostGrab(it.id, k.id);
         else {
           it.pending = now;
@@ -687,7 +690,7 @@ export class Game {
     const k = this.karts.get(m.by);
     if (!k || !(k === this.me || k.bot)) return;
     if (it.type === 'rocket') k.rockets = Math.min(9, k.rockets + 3);
-    if (it.type === 'health') k.hp = Math.min(MAX_HP, k.hp + 50);
+    if (it.type === 'health') k.hp = Math.min(k.maxHp, k.hp + 50);
     if (it.type === 'boost') k.boost = 1;
     if (k === this.me) {
       this.sfx.play('pickup');

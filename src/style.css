@@ -359,3 +359,82 @@ kbd {
   #right { bottom: 150px; }
   #board { display: none; }
 }
+
+/* ---------- menu: cars / mode ---------- */
+#carPick {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+@media (max-width: 560px) { #carPick { grid-template-columns: repeat(3, 1fr); } }
+.carBtn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  padding: 4px 4px 8px;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.carBtn img { width: 100%; max-width: 96px; aspect-ratio: 1; }
+.carBtn small { color: var(--muted); font-weight: 500; font-size: 10px; line-height: 1.2; text-align: center; }
+.carBtn.on { border-color: var(--accent); background: rgba(255, 183, 3, 0.12); }
+.seg { display: flex; gap: 6px; margin-bottom: 12px; }
+.seg button { flex: 1; background: rgba(255, 255, 255, 0.07); color: var(--text); padding: 9px 6px; }
+.seg button.on { background: var(--accent); color: #1a1204; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hintsm { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+
+/* ---------- race HUD ---------- */
+#raceHud, #lobbyMsg { display: none; }
+body.mode-race #raceHud { display: flex; }
+body.mode-race #lobbyMsg:not(.hidden) { display: block; }
+body.mode-race .bar.hp,
+body.mode-race .bar.heat,
+body.mode-race #rockets,
+body.mode-race #rockets + small,
+body.mode-race #crosshair,
+body.mode-race #hitmarker { display: none; }
+body.mode-race .bar.boost { height: 22px; }
+body.mode-race .bar.boost span { line-height: 22px; font-size: 12px; }
+#raceHud {
+  position: absolute;
+  top: 60px; right: 18px;
+  flex-direction: column;
+  align-items: flex-end;
+  text-shadow: 0 3px 10px rgba(0, 0, 0, 0.7);
+  font-family: 'Russo One', sans-serif;
+}
+#raceHud .pos span { font-size: 64px; color: var(--accent); line-height: 1; }
+#raceHud .pos small { font-size: 26px; color: var(--text); }
+#raceHud .lap { font-size: 22px; }
+#raceHud .lap b { color: var(--accent); font-weight: 400; }
+#raceHud .time { font-size: 20px; color: #cfe8ff; }
+body.mode-race #killfeed { top: auto; bottom: 200px; right: auto; left: 18px; align-items: flex-start; }
+#lobbyMsg {
+  position: absolute;
+  bottom: 110px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+#lobbyMsg b { color: var(--accent); }
+#results { background: rgba(5, 6, 10, 0.35); }
+#results table { width: 100%; border-collapse: collapse; margin: 10px 0; text-align: left; }
+#results td { padding: 7px 8px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+#results td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+#results tr.me td { color: var(--accent); }
+#results small { color: var(--muted); font-size: 10px; }
+#results .hint { color: var(--muted); }
+@media (max-width: 700px) {
+  #raceHud .pos span { font-size: 44px; }
+  #lobbyMsg { white-space: normal; width: 90%; text-align: center; border-radius: 14px; }
+}

@@ -100,6 +100,9 @@ export class Sfx {
       case 'pickup': this.tone('triangle', 600, 1200, 0.15, 0.3 * vol); setTimeout(() => this.ctx && this.tone('triangle', 900, 1800, 0.15, 0.3 * vol), 90); break;
       case 'overheat': this.noiseBurst(0.6, 0.3 * vol, 5000, 6); break;
       case 'kill': this.tone('square', 500, 1000, 0.1, 0.2 * vol); setTimeout(() => this.ctx && this.tone('square', 750, 1500, 0.18, 0.2 * vol), 100); break;
+      case 'beep': this.tone('square', 440, 440, 0.25, 0.25 * vol); break;
+      case 'go': this.tone('square', 880, 880, 0.6, 0.3 * vol); break;
+      case 'lap': this.tone('triangle', 660, 990, 0.2, 0.3 * vol); setTimeout(() => this.ctx && this.tone('triangle', 990, 1320, 0.25, 0.3 * vol), 140); break;
       case 'empty': this.tone('square', 200, 150, 0.05, 0.1 * vol); break;
     }
   }
