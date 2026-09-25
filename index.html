@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kart Blasters</title>
+    <meta name="description" content="Peer-to-peer multiplayer go-kart combat in your browser." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="game"></div>
+
+    <!-- Main menu -->
+    <div id="menu" class="overlay">
+      <div class="panel">
+        <h1>KART<span>BLASTERS</span></h1>
+        <p class="tag">Peer-to-peer go-kart combat. Drive, drift, and blast your friends.</p>
+
+        <label>Driver name <input id="name" maxlength="16" placeholder="Speedy" autocomplete="off" /></label>
+        <div class="label">Kart color</div>
+        <div id="colors"></div>
+
+        <div class="cols">
+          <div class="card">
+            <h3>Host a game</h3>
+            <label>Enemy bots
+              <select id="bots">
+                <option value="0">None</option>
+                <option value="2">2</option>
+                <option value="4" selected>4</option>
+                <option value="6">6</option>
+                <option value="8">8</option>
+              </select>
+            </label>
+            <button id="host" class="primary">Create room</button>
+          </div>
+          <div class="card">
+            <h3>Join a friend</h3>
+            <label>Room code <input id="code" maxlength="5" placeholder="ABCDE" autocomplete="off" /></label>
+            <button id="join" class="primary">Join room</button>
+          </div>
+        </div>
+        <button id="practice" class="ghost">Practice offline vs bots</button>
+        <div id="menuStatus"></div>
+
+        <div class="controls">
+          <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive</div>
+          <div><kbd>Mouse</kbd> aim turret</div>
+          <div><kbd>Left click</kbd> blaster</div>
+          <div><kbd>Right click</kbd>/<kbd>E</kbd> rocket</div>
+          <div><kbd>Shift</kbd> boost</div>
+          <div><kbd>Space</kbd> drift</div>
+          <div><kbd>Tab</kbd> scores</div>
+          <div><kbd>M</kbd> mute</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- In-game HUD -->
+    <div id="hud" class="hidden">
+      <div id="room"></div>
+      <div id="board"></div>
+      <div id="killfeed"></div>
+      <canvas id="minimap" width="170" height="170"></canvas>
+
+      <div id="crosshair"></div>
+      <div id="hitmarker"></div>
+      <div id="center"></div>
+      <div id="sub"></div>
+      <div id="toast"></div>
+      <div id="vignette"></div>
+
+      <div id="stats">
+        <div class="bar hp"><div id="hpFill"></div><span>HP <b id="hpText">100</b></span></div>
+        <div class="bar small"><div id="boostFill"></div><span>BOOST</span></div>
+        <div class="bar small heat"><div id="heatFill"></div><span id="heatLabel">HEAT</span></div>
+      </div>
+      <div id="right">
+        <div class="big"><span id="rockets">2</span><small>🚀 rockets</small></div>
+        <div class="big"><span id="speed">0</span><small>km/h</small></div>
+      </div>
+
+      <div id="scoreboard" class="hidden"></div>
+    </div>
+
+    <div id="clickToPlay" class="overlay hidden">
+      <div class="panel small">
+        <h2>Paused</h2>
+        <p>Click to take the wheel. Mouse aims, <kbd>Esc</kbd> frees the cursor.</p>
+        <button id="resume" class="primary">Play</button>
+        <button id="leave" class="ghost">Leave game</button>
+      </div>
+    </div>
+
+    <div id="ended" class="overlay hidden">
+      <div class="panel small">
+        <h2></h2>
+        <p></p>
+        <button class="primary" onclick="location.href = location.pathname">Back to menu</button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
