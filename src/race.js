@@ -364,6 +364,17 @@ export class RaceCar {
       const vx = this.wvel.x, vz = this.wvel.z;
       this.wvel.x = vx * c + vz * sn;
       this.wvel.z = -vx * sn + vz * c;
+      // Air guidance: ease the car back over the track so a long jump into a
+      // curve still comes down on the road instead of beside it
+      if (this.flyT > 0.1) {
+        const path = track.pathOf(this.route);
+        path.frame(this.s, fr);
+        _v.copy(this.wpos).sub(fr.P);
+        const off = _v.dot(fr.R), side = this.wvel.dot(fr.R);
+        const push = clamp(-off * 1.2 - side * 1.4, -14, 14) * dt;
+        this.wvel.x += fr.R.x * push;
+        this.wvel.z += fr.R.z * push;
+      }
       this.wpos.addScaledVector(this.wvel, dt);
       _v.copy(this.wvel).normalize();
       this.fwd.lerp(_v, Math.min(1, dt * 3)).normalize();

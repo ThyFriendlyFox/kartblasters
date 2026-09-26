@@ -14,7 +14,7 @@ function wrapAngle(a) {
  * The main circuit is a closed Path; alternate routes are open Paths.
  */
 export class Path {
-  constructor(pts, { closed = true, hw = 7.5, N0 = null } = {}) {
+  constructor(pts, { closed = true, hw = 7.5, N0 = null, N1 = null, level = [] } = {}) {
     this.closed = closed;
     this.hw = hw;
     const curve = new THREE.CatmullRomCurve3(pts.map((p) => p.p), closed, 'centripetal');
@@ -91,12 +91,40 @@ export class Path {
       twist = Math.atan2(cr.dot(Ti), endN.dot(Nstart));
     }
 
+    // Parallel transport through loops and corkscrews leaves the road rolled
+    // at the far end (or at the seam of a closed circuit). Undo that inside
+    // the stunts themselves, so straights stay level and routes rejoin the
+    // main road level.
+    const twistAt = new Float32Array(n);
+    let need = closed ? twist : 0;
+    if (!closed && N1) {
+      Ti.fromArray(T, (n - 1) * 3);
+      const endN = Nt[n - 1].clone().applyAxisAngle(Ti, roll[n - 1]);
+      const target = N1.clone().addScaledVector(Ti, -N1.dot(Ti)).normalize();
+      const cr = new THREE.Vector3().crossVectors(endN, target);
+      need = Math.atan2(cr.dot(Ti), endN.dot(target));
+    }
+    if (need) {
+      // Transport twist builds up where the road climbs/dives while turning
+      const w = new Float32Array(n);
+      let tot = 0;
+      for (let i = 0; i < n; i++) {
+        const ty = T[i * 3 + 1];
+        tot += w[i] = ty ** 4 + 0.0005;
+      }
+      let acc = 0;
+      for (let i = 0; i < n; i++) {
+        twistAt[i] = (need * acc) / tot;
+        acc += w[i];
+      }
+    }
+
     // Base frames (with twist correction and explicit roll)
     const Rv = new THREE.Vector3();
     const baseR = [];
     for (let i = 0; i < n; i++) {
       Ti.fromArray(T, i * 3);
-      const nv = Nt[i].applyAxisAngle(Ti, (twist * i) / n + roll[i]);
+      const nv = Nt[i].applyAxisAngle(Ti, twistAt[i] + roll[i]);
       Rv.crossVectors(Ti, nv).normalize();
       baseR.push(Rv.clone());
     }
@@ -110,12 +138,29 @@ export class Path {
       const kR = tB.sub(tA).divideScalar(4 * this.ds).dot(baseR[i]);
       bank[i] = THREE.MathUtils.clamp(kR * 16, -0.7, 0.7) * Math.max(0, Nt[i].y);
     }
+    // No banking where routes fork off / merge in, so both roads meet level:
+    // the main road is flattened around each fork and join...
+    const lvl = new Float32Array(n).fill(1);
+    const RAMP = 30;
+    for (const z of level) {
+      let best = 0, bd = Infinity;
+      for (let i = 0; i < n; i++) {
+        const dd = v.fromArray(P, i * 3).distanceToSquared(z.pos);
+        if (dd < bd) (bd = dd), (best = i);
+      }
+      for (let j = -z.before - RAMP; j <= z.after + RAMP; j++) {
+        const out = j < -z.before ? -z.before - j : j > z.after ? j - z.after : 0;
+        const i = nb(best + Math.round(j / this.ds));
+        lvl[i] = Math.min(lvl[i], out / RAMP);
+      }
+    }
     const W = 18;
     for (let i = 0; i < n; i++) {
       let acc = 0;
       for (let j = -W; j <= W; j++) acc += bank[nb(i + j)];
-      // Open routes start and end level so they meet the main road cleanly
-      const edge = closed ? 1 : Math.min(1, i / 30, (n - 1 - i) / 30);
+      // ...and open routes start and end level (through their S-bends)
+      const EDGE = 110;
+      const edge = closed ? lvl[i] : Math.min(1, (i * this.ds) / EDGE, ((n - 1 - i) * this.ds) / EDGE);
       Ti.fromArray(T, i * 3);
       const nv = Nt[i].applyAxisAngle(Ti, (acc / (2 * W + 1)) * edge);
       Rv.crossVectors(Ti, nv).normalize();
@@ -397,7 +442,11 @@ export class Track extends Path {
   constructor(id) {
     const def = TRACKS[id] || TRACKS.orange;
     const turtle = def.build();
-    super(turtle.pts, { closed: true, hw: def.width / 2 });
+    const level = (def.branches || []).flatMap((bd) => [
+      { pos: turtle.marks[bd.from].pos, before: 10, after: 130 },
+      { pos: turtle.marks[bd.to].pos, before: 130, after: 10 },
+    ]);
+    super(turtle.pts, { closed: true, hw: def.width / 2, level });
     this.def = def;
     this.id = TRACKS[id] ? id : 'orange';
     this.marks = turtle.marks || {};
@@ -420,7 +469,7 @@ export class Track extends Path {
       bd.build(bt);
       this.frame(b, fr);
       bt.closeS(fr.P.clone(), Math.atan2(fr.T.x, fr.T.z));
-      const path = new Path(bt.pts, { closed: false, hw: this.hw, N0 });
+      const path = new Path(bt.pts, { closed: false, hw: this.hw, N0, N1: fr.N.clone() });
       const br = { id: bi + 1, path, from: a, to: b, side, name: bd.name || 'ALT ROUTE', lock: bd.lock || null };
       br.fork = this.splitZone(path, a, +1);
       br.join = this.splitZone(path, b, -1);
@@ -526,39 +575,8 @@ export class Track extends Path {
     this.gates = new Map();
     this.keyMeshes = new Map();
     for (const br of this.branches) {
-      // Sign gantry before the fork: one sign per lane of the Y
-      this.frame(br.from - 26, fr);
-      const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(fr.R.clone().negate(), fr.N, fr.T.clone().negate()));
-      const signs = [
-        [br.side * this.hw * 0.5, `${br.lock ? '🔒 ' : ''}${br.name} ${br.side > 0 ? '➜' : '⬅'}`, br.lock ? '#ffd000' : '#00e5ff'],
-        [-br.side * this.hw * 0.5, br.side > 0 ? '⬅ MAIN' : 'MAIN ➜', '#ffffff'],
-      ];
-      for (const [lat, text, color] of signs) {
-        const sign = new THREE.Mesh(new THREE.BoxGeometry(this.hw * 0.95, 2.2, 0.4), new THREE.MeshBasicMaterial({ map: signTexture(text, color) }));
-        sign.position.copy(fr.P).addScaledVector(fr.R, lat).addScaledVector(fr.N, 8);
-        sign.quaternion.copy(q);
-        scene.add(sign);
-      }
-      const postMat = new THREE.MeshStandardMaterial({ color: '#444a55' });
-      for (const e of [-1, 1]) {
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.4, 9, 0.4), postMat);
-        post.position.copy(fr.P).addScaledVector(fr.R, e * (this.hw + 1)).addScaledVector(fr.N, 4.5);
-        post.quaternion.copy(q);
-        scene.add(post);
-      }
-      const beam = new THREE.Mesh(new THREE.BoxGeometry(this.hw * 2 + 2.4, 0.4, 0.4), postMat);
-      beam.position.copy(fr.P).addScaledVector(fr.N, 9.2);
-      beam.quaternion.copy(q);
-      scene.add(beam);
-
-      // Striped bollard at the point of each V where the roads part / meet
-      for (const z of [br.fork, br.join]) {
-        this.frame(z.gs, fr);
-        const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, 1.6, 12), new THREE.MeshStandardMaterial({ map: stripeTex(), emissive: '#332200' }));
-        nose.position.copy(fr.P).addScaledVector(fr.R, z.off / 2).addScaledVector(fr.N, 0.8);
-        nose.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), fr.N);
-        scene.add(nose);
-      }
+      for (const z of [br.fork, br.join]) this.buildSplitIsland(scene, theme, br, z);
+      this.buildForkPortal(scene, theme, br);
 
       if (!br.lock) continue;
       // Locked: a force-field wall along the lane divider of the Y until you have the key
@@ -601,6 +619,114 @@ export class Track extends Path {
       scene.add(g);
       this.keyMeshes.set(k.id, g);
     }
+  }
+
+  /**
+   * The solid divider between the two roads after they part (and before they
+   * meet again): a hazard-striped island with a rounded nose at the gore.
+   */
+  buildSplitIsland(scene, theme, br, z) {
+    const fm = Path.newFrame(), fb = Path.newFrame();
+    const H = 2.4, e = this.hw + 0.05;
+    const A = [], B = [], NA = [], NB = [];
+    for (let k = 0; k <= 40; k += 2) {
+      this.frame(z.gs + z.dir * k, fm);
+      br.path.frame(z.bs + z.dir * k, fb);
+      if (fb.gap || fm.gap || fb.N.dot(fm.N) < 0.9) break;
+      const a = fm.P.clone().addScaledVector(fm.R, br.side * e);
+      const b2 = fb.P.clone().addScaledVector(fb.R, -br.side * e);
+      if (k > 0 && a.distanceTo(b2) > 16) break;
+      A.push(a);
+      B.push(b2);
+      NA.push(fm.N.clone());
+      NB.push(fb.N.clone());
+    }
+    if (A.length < 2) return;
+    const side = [], top = [], sUv = [], tUv = [];
+    const up = (p, n, h) => p.clone().addScaledVector(n, h);
+    const quad = (arr, uvs, p0, p1, p2, p3, u0, u1) => {
+      for (const [p, u, v] of [[p0, u0, 0], [p1, u1, 0], [p2, u1, 1], [p0, u0, 0], [p2, u1, 1], [p3, u0, 1]]) {
+        arr.push(p.x, p.y, p.z);
+        uvs.push(u, v);
+      }
+    };
+    for (let i = 0; i < A.length - 1; i++) {
+      const u0 = i / 2, u1 = (i + 1) / 2;
+      quad(side, sUv, up(A[i], NA[i], -0.4), up(A[i + 1], NA[i + 1], -0.4), up(A[i + 1], NA[i + 1], H), up(A[i], NA[i], H), u0, u1);
+      quad(side, sUv, up(B[i], NB[i], -0.4), up(B[i + 1], NB[i + 1], -0.4), up(B[i + 1], NB[i + 1], H), up(B[i], NB[i], H), u0, u1);
+      quad(top, tUv, up(A[i], NA[i], H), up(A[i + 1], NA[i + 1], H), up(B[i + 1], NB[i + 1], H), up(B[i], NB[i], H), 0, 1);
+    }
+    const n = A.length - 1; // square cap at the far end
+    quad(top, tUv, up(A[n], NA[n], -0.4), up(B[n], NB[n], -0.4), up(B[n], NB[n], H), up(A[n], NA[n], H), 0, 1);
+    const neon = theme === 'neon';
+    const mk = (arr, uvs, mat) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      g.computeVertexNormals();
+      scene.add(new THREE.Mesh(g, mat));
+    };
+    mk(side, sUv, new THREE.MeshStandardMaterial({ map: hazardTex(), emissive: neon ? '#443300' : '#000', side: THREE.DoubleSide }));
+    mk(top, tUv, new THREE.MeshStandardMaterial({ color: neon ? '#1c2140' : '#3a3f4a', side: THREE.DoubleSide }));
+    // Rounded nose where the lanes part
+    const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, H + 0.4, 16), new THREE.MeshStandardMaterial({ map: stripeTex(), emissive: neon ? '#443300' : '#221600' }));
+    nose.position.copy(A[0]).lerp(B[0], 0.5).addScaledVector(NA[0], H / 2 - 0.2);
+    nose.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), NA[0]);
+    scene.add(nose);
+    z.island = { A, B, NA, NB };
+  }
+
+  /**
+   * A twin-tunnel portal just past the fork: posts on both outer edges and on
+   * the island, one lintel per lane carrying that lane's sign, and a big
+   * double-arrow marker over the divider.
+   */
+  buildForkPortal(scene, theme, br) {
+    const isl = br.fork.island;
+    if (!isl) return;
+    const i = Math.min(3, isl.A.length - 1), k = i * 2;
+    const fm = Path.newFrame(), fb = Path.newFrame();
+    this.frame(br.fork.gs + k, fm);
+    br.path.frame(br.fork.bs + k, fb);
+    const neon = theme === 'neon';
+    const H = 8;
+    const postMat = new THREE.MeshStandardMaterial({ color: neon ? '#2a2f55' : '#5b6474', metalness: 0.3, roughness: 0.5 });
+    const trimMat = new THREE.MeshStandardMaterial({ color: neon ? '#00e5ff' : '#c8f000', emissive: neon ? '#00a0c0' : '#3a4a00' });
+    const bar = (p, q, w, h, mat) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, p.distanceTo(q) + w), mat);
+      m.position.copy(p).lerp(q, 0.5);
+      m.lookAt(q);
+      scene.add(m);
+      return m;
+    };
+    const outM = fm.P.clone().addScaledVector(fm.R, -br.side * (this.hw + 0.9));
+    const mid = isl.A[i].clone().lerp(isl.B[i], 0.5);
+    const outB = fb.P.clone().addScaledVector(fb.R, br.side * (this.hw + 0.9));
+    const tops = [];
+    for (const [p, n] of [[outM, fm.N], [mid, fm.N.clone().add(fb.N).normalize()], [outB, fb.N]]) {
+      const t = p.clone().addScaledVector(n, H);
+      bar(p.clone().addScaledVector(n, -0.5), t, 1.2, 1.2, postMat);
+      tops.push(t);
+    }
+    // Lintels over each tunnel mouth, with that lane's sign hung on the front
+    const lanes = [
+      [tops[0], tops[1], fm, 0, br.side > 0 ? '⬅ MAIN' : 'MAIN ➜', '#ffffff'],
+      [tops[1], tops[2], fb, 0, `${br.lock ? '🔒 ' : ''}${br.name} ${br.side > 0 ? '➜' : '⬅'}`, br.lock ? '#ffd000' : '#00e5ff'],
+    ];
+    for (const [p, q, f, , text, color] of lanes) {
+      bar(p, q, 1.6, 1.6, postMat);
+      const lo = p.clone().addScaledVector(f.N, -1.3), lo2 = q.clone().addScaledVector(f.N, -1.3);
+      bar(lo, lo2, 0.35, 0.35, trimMat);
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(this.hw * 1.3, 2.4, 0.3), new THREE.MeshBasicMaterial({ map: signTexture(text, color) }));
+      sign.position.copy(p).lerp(q, 0.5).addScaledVector(f.N, -0.2).addScaledVector(f.T, -1.0);
+      sign.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(f.R.clone().negate(), f.N, f.T.clone().negate()));
+      scene.add(sign);
+    }
+    // Glowing double arrow over the divider
+    const arrow = new THREE.Mesh(new THREE.PlaneGeometry(5, 2.5), new THREE.MeshBasicMaterial({ map: splitArrowTex(), transparent: true, side: THREE.DoubleSide }));
+    arrow.position.copy(tops[1]).addScaledVector(fm.N, 2.0).addScaledVector(fm.T, -1.0);
+    arrow.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(fm.R.clone().negate(), fm.N, fm.T.clone().negate()));
+    scene.add(arrow);
   }
 
   /** Show only the gates / keys this player still needs. */
@@ -693,6 +819,48 @@ function stripeTex() {
     }
   });
   return t;
+}
+
+function hazardTex() {
+  return canvasTex(128, 64, (g, w, h) => {
+    g.fillStyle = '#ffd000';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = '#15171c';
+    for (let x = -h; x < w + h; x += 32) {
+      g.beginPath();
+      g.moveTo(x, h);
+      g.lineTo(x + 16, h);
+      g.lineTo(x + 16 + h, 0);
+      g.lineTo(x + h, 0);
+      g.fill();
+    }
+  });
+}
+
+function splitArrowTex() {
+  return canvasTex(256, 128, (g, w, h) => {
+    g.fillStyle = 'rgba(8,20,12,0.85)';
+    g.fillRect(8, 8, w - 16, h - 16);
+    g.strokeStyle = '#39ff88';
+    g.fillStyle = '#39ff88';
+    g.lineWidth = 6;
+    g.strokeRect(8, 8, w - 16, h - 16);
+    const c = h / 2;
+    for (const s of [-1, 1]) {
+      g.beginPath(); // chevron pointing out to each lane
+      g.moveTo(w / 2 + s * 36, c - 30);
+      g.lineTo(w / 2 + s * 90, c);
+      g.lineTo(w / 2 + s * 36, c + 30);
+      g.lineTo(w / 2 + s * 52, c);
+      g.fill();
+    }
+    g.beginPath(); // diamond in the middle
+    g.moveTo(w / 2, c - 22);
+    g.lineTo(w / 2 + 20, c);
+    g.lineTo(w / 2, c + 22);
+    g.lineTo(w / 2 - 20, c);
+    g.fill();
+  });
 }
 
 function signTexture(text, color) {
