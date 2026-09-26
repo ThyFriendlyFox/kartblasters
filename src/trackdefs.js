@@ -143,7 +143,7 @@ export class TrackTurtle {
    * Lane-change S-curve: shift sideways by `lateral` (+ = right) and end up
    * heading the same way. Used to peel a route cleanly away from the main road.
    */
-  sOut(lateral, angleDeg = 25) {
+  sOut(lateral, angleDeg = 35) {
     const a = THREE.MathUtils.degToRad(angleDeg);
     const r = Math.abs(lateral) / (2 * (1 - Math.cos(a)));
     const sgn = Math.sign(lateral) || 1;
@@ -154,13 +154,13 @@ export class TrackTurtle {
    * Finish a route: run straight (absorbing any height change), then a mirror
    * S-curve that lands exactly on the target point and heading.
    */
-  closeS(p1, yaw1, angleDeg = 25) {
+  closeS(p1, yaw1, angleDeg = 35) {
     const d = this.dir(), r = this.right();
     const rel = p1.clone().sub(this.pos);
     const fwd = rel.x * d.x + rel.z * d.z, lat = rel.x * r.x + rel.z * r.z;
     // Use the gentlest S-curve that fits the room left
     let run = -1, sLen = 0;
-    for (const deg of [angleDeg, 32, 40]) {
+    for (const deg of [angleDeg, 40, 45]) {
       const a = THREE.MathUtils.degToRad(deg);
       const rad = Math.abs(lat) / (2 * (1 - Math.cos(a)));
       sLen = Math.abs(lat) < 0.5 ? 0 : 2 * rad * Math.sin(a);
@@ -228,7 +228,7 @@ export class TrackTurtle {
 }
 
 // Leg lengths chosen so each circuit closes back on its start line
-const LEG = { twin2: 60, twin3: 210, twin4: 186, junc2: 60, junc3: 88, junc4: 170 };
+const LEG = { twin2: 60, twin3: 176, twin4: 186, junc2: 60, junc3: 118, junc4: 170 };
 
 export const TRACKS = {
   orange: {
@@ -335,7 +335,7 @@ export const TRACKS = {
       const t = new TrackTurtle(0, 4, 0, 0, this.width).paint('#ff7a00');
       t.straight(40).boost(12).straight(20).mark('f1');
       // Low road: flat and fast
-      t.straight(80).boost(12).straight(120).boost(12).straight(76).mark('j1');
+      t.straight(95).boost(12).straight(120).boost(12).straight(91).mark('j1');
       t.straight(20);
       t.turn(-90, 45);
       t.straight(20).mark('k1').straight(30);
@@ -345,7 +345,7 @@ export const TRACKS = {
       t.turn(-90, 45);
       t.straight(20).mark('f2');
       // Long way round: a wide S-bend (the shortcut cuts straight through)
-      t.straight(30).turn(80, 40).turn(-160, 40).turn(80, 40).straight(30).mark('j2');
+      t.straight(62).turn(80, 40).turn(-160, 40).turn(80, 40).straight(62).mark('j2');
       t.straight(LEG.twin3);
       t.turn(-90, 45);
       t.boost(12).straight(LEG.twin4);
@@ -357,13 +357,13 @@ export const TRACKS = {
         from: 'f1', to: 'j1', side: 1, name: 'HIGH ROAD', color: '#39d353',
         build(b) {
           // Peel off flat, climb, jump, come back down, merge back in
-          b.sOut(18).straight(6).straight(26, 7).paint('#ffd000').ramp(14, 1.6).gap(34, -4).paint('#39d353').straight(24, -4.6);
+          b.sOut(36).straight(22, 7).paint('#ffd000').ramp(14, 1.6).gap(34, -4).paint('#39d353').straight(24, -4.6);
         },
       },
       {
         from: 'f2', to: 'j2', side: 1, name: 'SHORTCUT', color: '#b400ff', lock: 'k1',
         build(b) {
-          b.sOut(18).straight(8).corkscrew(54, 1).boost(10);
+          b.sOut(36).straight(8).corkscrew(54, 1).boost(10);
         },
       },
     ],
@@ -378,7 +378,7 @@ export const TRACKS = {
       const t = new TrackTurtle(0, 26, 0, 0, this.width).paint('#1f4bff');
       t.straight(40).boost(12).straight(20).mark('f1');
       // Upper deck: rolling waves
-      t.straight(90).paint('#ff2bd6').straight(30, 6).straight(30, -6).straight(30, 6).straight(30, -6).paint('#1f4bff').straight(90).mark('j1');
+      t.straight(105).paint('#ff2bd6').straight(30, 6).straight(30, -6).straight(30, 6).straight(30, -6).paint('#1f4bff').straight(105).mark('j1');
       t.straight(20);
       t.turn(-90, 50);
       t.straight(30);
@@ -398,13 +398,13 @@ export const TRACKS = {
       {
         from: 'f1', to: 'j1', side: -1, name: 'LOWER DECK', color: '#00d2ff',
         build(b) {
-          b.sOut(-20).straight(6).straight(24, -10).boost(12).straight(16).boost(12).straight(24, 10);
+          b.sOut(-36).straight(6).straight(24, -10).boost(12).straight(16).boost(12).straight(24, 10);
         },
       },
       {
         from: 'f2', to: 'j2', side: 1, name: 'EXPRESS', color: '#ffe600', lock: 'k1',
         build(b) {
-          b.sOut(20).straight(8).straight(26, 10).boost(12).straight(26, -10);
+          b.sOut(36).straight(8).straight(26, 10).boost(12).straight(26, -10);
         },
       },
     ],

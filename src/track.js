@@ -91,12 +91,14 @@ export class Path {
       twist = Math.atan2(cr.dot(Ti), endN.dot(Nstart));
     }
 
-    // Parallel transport through loops and corkscrews leaves the road rolled
-    // at the far end (or at the seam of a closed circuit). Undo that inside
-    // the stunts themselves, so straights stay level and routes rejoin the
-    // main road level.
+    // Parallel transport through a corkscrew leaves an open route rolled at
+    // its far end. Undo that inside the stunt itself, so the route rejoins
+    // the main road level.
     const twistAt = new Float32Array(n);
-    let need = closed ? twist : 0;
+    // (The main circuit keeps its seam twist spread over the whole lap: that
+    // lean is part of its character.)
+    if (closed) for (let i = 0; i < n; i++) twistAt[i] = (twist * i) / n;
+    let need = 0;
     if (!closed && N1) {
       Ti.fromArray(T, (n - 1) * 3);
       const endN = Nt[n - 1].clone().applyAxisAngle(Ti, roll[n - 1]);
@@ -468,7 +470,11 @@ export class Track extends Path {
       const bt = new TrackTurtle(fr.P.x, fr.P.y, fr.P.z, Math.atan2(fr.T.x, fr.T.z), def.width).paint(bd.color || '#ff7a00');
       bd.build(bt);
       this.frame(b, fr);
-      bt.closeS(fr.P.clone(), Math.atan2(fr.T.x, fr.T.z));
+      try {
+        bt.closeS(fr.P.clone(), Math.atan2(fr.T.x, fr.T.z));
+      } catch (e) {
+        throw new Error(`Track ${id}, route ${bd.name}: ${e.message}`);
+      }
       const path = new Path(bt.pts, { closed: false, hw: this.hw, N0, N1: fr.N.clone() });
       const br = { id: bi + 1, path, from: a, to: b, side, name: bd.name || 'ALT ROUTE', lock: bd.lock || null };
       br.fork = this.splitZone(path, a, +1);
@@ -629,13 +635,13 @@ export class Track extends Path {
     const fm = Path.newFrame(), fb = Path.newFrame();
     const H = 2.4, e = this.hw + 0.05;
     const A = [], B = [], NA = [], NB = [];
-    for (let k = 0; k <= 40; k += 2) {
+    for (let k = 0; k <= 60; k += 2) {
       this.frame(z.gs + z.dir * k, fm);
       br.path.frame(z.bs + z.dir * k, fb);
       if (fb.gap || fm.gap || fb.N.dot(fm.N) < 0.9) break;
       const a = fm.P.clone().addScaledVector(fm.R, br.side * e);
       const b2 = fb.P.clone().addScaledVector(fb.R, -br.side * e);
-      if (k > 0 && a.distanceTo(b2) > 16) break;
+      if (k > 0 && a.distanceTo(b2) > 24) break;
       A.push(a);
       B.push(b2);
       NA.push(fm.N.clone());
@@ -684,7 +690,10 @@ export class Track extends Path {
   buildForkPortal(scene, theme, br) {
     const isl = br.fork.island;
     if (!isl) return;
-    const i = Math.min(3, isl.A.length - 1), k = i * 2;
+    // Stand it where the divider is wide enough to read as a central pier
+    let i = isl.A.findIndex((a, j) => a.distanceTo(isl.B[j]) >= 5);
+    if (i < 0) i = Math.min(3, isl.A.length - 1);
+    const k = i * 2;
     const fm = Path.newFrame(), fb = Path.newFrame();
     this.frame(br.fork.gs + k, fm);
     br.path.frame(br.fork.bs + k, fb);
@@ -703,9 +712,10 @@ export class Track extends Path {
     const mid = isl.A[i].clone().lerp(isl.B[i], 0.5);
     const outB = fb.P.clone().addScaledVector(fb.R, br.side * (this.hw + 0.9));
     const tops = [];
-    for (const [p, n] of [[outM, fm.N], [mid, fm.N.clone().add(fb.N).normalize()], [outB, fb.N]]) {
+    const pier = THREE.MathUtils.clamp(isl.A[i].distanceTo(isl.B[i]) - 1, 1.2, 4);
+    for (const [p, n, w] of [[outM, fm.N, 1.2], [mid, fm.N.clone().add(fb.N).normalize(), pier], [outB, fb.N, 1.2]]) {
       const t = p.clone().addScaledVector(n, H);
-      bar(p.clone().addScaledVector(n, -0.5), t, 1.2, 1.2, postMat);
+      bar(p.clone().addScaledVector(n, -0.5), t, w, w, postMat);
       tops.push(t);
     }
     // Lintels over each tunnel mouth, with that lane's sign hung on the front
@@ -717,14 +727,14 @@ export class Track extends Path {
       bar(p, q, 1.6, 1.6, postMat);
       const lo = p.clone().addScaledVector(f.N, -1.3), lo2 = q.clone().addScaledVector(f.N, -1.3);
       bar(lo, lo2, 0.35, 0.35, trimMat);
-      const sign = new THREE.Mesh(new THREE.BoxGeometry(this.hw * 1.3, 2.4, 0.3), new THREE.MeshBasicMaterial({ map: signTexture(text, color) }));
-      sign.position.copy(p).lerp(q, 0.5).addScaledVector(f.N, -0.2).addScaledVector(f.T, -1.0);
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(Math.min(this.hw * 1.3, p.distanceTo(q) - pier / 2 - 2), 2.4, 0.3), new THREE.MeshBasicMaterial({ map: signTexture(text, color) }));
+      sign.position.copy(p).lerp(q, 0.5).addScaledVector(f.N, -0.2).addScaledVector(f.T, -(pier / 2 + 0.4));
       sign.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(f.R.clone().negate(), f.N, f.T.clone().negate()));
       scene.add(sign);
     }
     // Glowing double arrow over the divider
     const arrow = new THREE.Mesh(new THREE.PlaneGeometry(5, 2.5), new THREE.MeshBasicMaterial({ map: splitArrowTex(), transparent: true, side: THREE.DoubleSide }));
-    arrow.position.copy(tops[1]).addScaledVector(fm.N, 2.0).addScaledVector(fm.T, -1.0);
+    arrow.position.copy(tops[1]).addScaledVector(fm.N, -2.2).addScaledVector(fm.T, -(pier / 2 + 0.3));
     arrow.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(fm.R.clone().negate(), fm.N, fm.T.clone().negate()));
     scene.add(arrow);
   }
