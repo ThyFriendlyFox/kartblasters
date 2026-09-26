@@ -720,7 +720,7 @@ function buildDaylight(scene, theme, track) {
   const sun = new THREE.DirectionalLight(...T.sun);
   sun.position.set(120, 220, 80);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.setScalar(document.body.classList.contains('touch') ? 1024 : 2048);
   const sc = sun.shadow.camera;
   sc.left = sc.bottom = -280;
   sc.right = sc.top = 280;

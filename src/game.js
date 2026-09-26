@@ -26,14 +26,16 @@ const _dir = new THREE.Vector3();
 const Z = new THREE.Vector3(0, 0, 1);
 
 export class Game {
-  constructor({ net, name, color, car, botCount, sfx, code, welcome, map = 'stadium', destructible = false }) {
+  constructor({ net, name, color, car, botCount, sfx, code, welcome, map = 'stadium', destructible = false, mobile = null }) {
+    this.mobile = mobile;
+    document.body.classList.add('mode-battle');
     this.net = net;
     this.sfx = sfx;
     this.code = code;
     this.hud = new Hud();
 
     const renderer = (this.renderer = new THREE.WebGLRenderer({ antialias: true }));
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -246,17 +248,43 @@ export class Game {
     this.buildCarSwap();
     const lock = () => {
       this.sfx.init();
+      if (this.mobile) {
+        // Phones have no pointer lock: "Play" just resumes and re-centers tilt
+        this.locked = true;
+        overlay.classList.add('hidden');
+        this.mobile.setVisible(true);
+        this.mobile.calibrate();
+        return;
+      }
       c.requestPointerLock?.();
     };
+    if (this.mobile) {
+      this.mobile.onPause = () => {
+        this.locked = false;
+        this.mobile.setVisible(false);
+        overlay.classList.remove('hidden');
+      };
+      overlay.querySelector('p').textContent = 'Tilt to steer, tilt forward for gas and back to brake. Drag to aim and hold to shoot. Hold the phone how you like to drive, then tap Play.';
+      document.getElementById('weaponBar').addEventListener('pointerdown', (e) => {
+        const slot = e.target.closest('.wslot');
+        if (!slot) return;
+        e.preventDefault();
+        this.selectWeapon(SLOTS[[...slot.parentNode.children].indexOf(slot)]);
+      });
+    }
     c.addEventListener('click', lock);
     document.getElementById('resume').addEventListener('click', lock);
     document.getElementById('leave').addEventListener('click', () => this.exit());
     document.addEventListener('pointerlockchange', () => {
+      if (this.mobile) return;
       this.locked = document.pointerLockElement === c;
       overlay.classList.toggle('hidden', this.locked || this.gameOver);
       if (!this.locked) this.mouse.left = this.mouse.right = false;
     });
-    overlay.classList.remove('hidden');
+    if (this.mobile) {
+      this.locked = true;
+      overlay.classList.add('hidden');
+    } else overlay.classList.remove('hidden');
 
     document.addEventListener('mousemove', (e) => {
       if (!this.locked) return;
@@ -311,6 +339,7 @@ export class Game {
     const k = this.keys;
     const on = (...codes) => codes.some((c) => k.has(c));
     if (!this.locked) return { throttle: 0, steer: 0, boost: false, drift: false };
+    if (this.mobile) return this.mobile.read();
     return {
       throttle: (on('KeyW', 'ArrowUp') ? 1 : 0) - (on('KeyS', 'ArrowDown') ? 1 : 0),
       steer: (on('KeyA', 'ArrowLeft') ? 1 : 0) - (on('KeyD', 'ArrowRight') ? 1 : 0),
@@ -1189,8 +1218,15 @@ export class Game {
         if (Math.random() < 0.5) this.fx.spawn({ color: Math.random() < 0.5 ? '#ff7b1c' : '#ffd166', pos: _a.set(me.pos.x + (Math.random() - 0.5) * 2, me.pos.y + 1, me.pos.z + (Math.random() - 0.5) * 2), vel: _b.set(0, 4, 0), life: 0.4, size: 0.5, grow: 2, additive: true });
         this.damageMe(BURN_DPS * dt, me.burnBy, 'flame', now, null, true);
       }
-      if (this.locked && this.mouse.left) this.tryFire(me, me.weapon, now);
-      if (this.locked && (this.mouse.right || this.keys.has('KeyE') || this.keys.has('KeyQ'))) this.tryFire(me, 'rocket', now);
+      const m = this.locked && this.mobile;
+      if (m) {
+        // Drag anywhere to swing the turret
+        const [dx, dy] = m.consumeAim();
+        me.aimYaw -= dx * 0.0065;
+        me.aimPitch = Math.max(-0.35, Math.min(0.55, me.aimPitch - dy * 0.005));
+      }
+      if (this.locked && (this.mouse.left || m?.fire)) this.tryFire(me, me.weapon, now);
+      if (this.locked && (this.mouse.right || m?.rocket || this.keys.has('KeyE') || this.keys.has('KeyQ'))) this.tryFire(me, 'rocket', now);
       if (me.drifting && Math.random() < 0.6) {
         const f = me.forward(_b);
         this.fx.spark(_a.set(me.pos.x - f.x * 1.6, 0.2, me.pos.z - f.z * 1.6), '#ffd166');

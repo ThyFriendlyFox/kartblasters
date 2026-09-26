@@ -88,7 +88,7 @@ export function buildArena(scene, { map = 'stadium', destructible = false } = {}
   const sun = new THREE.DirectionalLight('#fff4e0', 2.2);
   sun.position.set(60, 110, 40);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.setScalar(document.body.classList.contains('touch') ? 1024 : 2048);
   const sc = sun.shadow.camera;
   sc.left = sc.bottom = -110;
   sc.right = sc.top = 110;

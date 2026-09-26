@@ -103,6 +103,19 @@ Take the jumps fast: if you come up short, you wipe out and respawn past the lan
 
 **Practice offline vs AI** runs either mode with no network at all.
 
+### Playing on a phone
+
+Open the site on your phone and turn it sideways. The first tap asks for motion-sensor permission on iPhone.
+
+- **Steer:** rotate the phone like a steering wheel (clockwise = right).
+- **Gas / brake:** tilt the top of the phone away from you for gas, toward you to brake. "Neutral" is however you're holding the phone when the game starts; tap ⏸ then Play to re-center it.
+- **Buttons:** NITRO/BOOST and DRIFT on the right, 🚀 rocket in battle, ⏸ top-left.
+- **Battle:** drag a finger anywhere to aim the turret. Holding the finger down fires. Tap the weapon bar to switch weapons.
+- **Race tricks:** in the air, tap the left or right side of the screen to spin, or DRIFT to flip.
+- No motion sensor (or permission denied)? A virtual joystick appears bottom-left instead.
+
+Tilt needs HTTPS, which Vercel provides.
+
 ## Run locally
 
 ```bash

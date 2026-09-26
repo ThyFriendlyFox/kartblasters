@@ -481,3 +481,68 @@ body.mode-race #weaponBar { display: none; }
   text-shadow: 0 2px 6px #000;
 }
 @media (max-width: 800px) { .wslot { width: 30px; height: 40px; font-size: 13px; } #stats { bottom: 70px; } }
+
+/* ---------- phones ---------- */
+body.touch { touch-action: none; overscroll-behavior: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#rotate { display: none; z-index: 40; }
+@media (orientation: portrait) { body.touch.ingame #rotate { display: flex; } }
+#touchUI { position: fixed; inset: 0; z-index: 12; pointer-events: none; }
+body.touch #hud { z-index: 13; }
+#tAim { position: absolute; inset: 0; pointer-events: auto; touch-action: none; }
+.tbtn {
+  pointer-events: auto; touch-action: none;
+  background: rgba(0, 0, 0, 0.45); color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 50%;
+  font: 800 12px Inter, system-ui, sans-serif; padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.tbtn { display: flex; align-items: center; justify-content: center; }
+.tbtn.big { width: 72px; height: 72px; }
+.tbtn.down { background: rgba(255, 183, 3, 0.8); color: #1a1204; border-color: #fff; }
+#tRocket { font-size: 26px; }
+#tPause { position: absolute; top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); width: 42px; height: 42px; font-size: 16px; }
+.tcol.tright { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: 14px; display: flex; gap: 10px; align-items: flex-end; }
+#tStick {
+  position: absolute; left: max(22px, env(safe-area-inset-left)); bottom: 22px;
+  width: 130px; height: 130px; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.3); border: 2px solid rgba(255, 255, 255, 0.3);
+  pointer-events: auto; touch-action: none;
+  display: flex; align-items: center; justify-content: center;
+}
+#tStick .knob { width: 56px; height: 56px; border-radius: 50%; background: rgba(255, 255, 255, 0.7); }
+.tiltbar {
+  position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%);
+  width: 110px; height: 6px; border-radius: 3px; background: rgba(0, 0, 0, 0.4);
+}
+.tiltbar span { position: absolute; left: 50%; top: -4px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #fff; transition: background 0.2s; }
+#touchUI.hidden, #tStick.hidden, .tiltbar.hidden { display: none; }
+
+/* Landscape phone HUD layout */
+body.touch #board { top: 60px; font-size: 12px; min-width: 150px; padding: 6px 10px; }
+body.touch #stats { left: 50%; bottom: 12px; transform: translateX(-50%); width: min(230px, 30vw); gap: 4px; }
+body.touch .bar.small span { display: none; }
+body.touch .bar { height: 20px; }
+body.touch .bar span { line-height: 20px; font-size: 11px; }
+body.touch .bar.small, body.touch.mode-race .bar.boost { height: 12px; }
+body.touch .bar.small span { line-height: 12px; font-size: 9px; }
+body.touch #minimap { right: max(12px, env(safe-area-inset-right)); left: auto; top: 128px; bottom: auto; width: 88px; height: 88px; }
+body.touch #board .row:nth-child(n + 5) { display: none; }
+body.touch #right { bottom: 100px; right: max(16px, env(safe-area-inset-right)); }
+body.touch .big span { font-size: 26px; }
+body.touch #weaponBar { top: 52px; bottom: auto; pointer-events: auto; gap: 3px; }
+body.touch .wslot { width: 34px; height: 40px; font-size: 13px; }
+body.touch .wname { top: 44px; bottom: auto; font-size: 12px; }
+body.touch #crosshair { width: 26px; height: 26px; }
+body.touch #raceHud { top: 12px; right: max(16px, env(safe-area-inset-right)); }
+body.touch #raceHud .pos span { font-size: 40px; }
+body.touch #raceHud .lap { font-size: 16px; }
+body.touch #raceHud .time { font-size: 14px; }
+body.touch #room { font-size: 12px; top: 8px; }
+body.touch #lobbyMsg { bottom: 64px; font-size: 13px; }
+body.touch #killfeed { top: 150px; left: max(12px, env(safe-area-inset-left)); right: auto; align-items: flex-start; font-size: 11px; }
+body.touch.mode-battle #minimap { top: 12px; }
+body.touch #lobbyMsg small { display: none; }
+body.touch.mode-race #killfeed { top: auto; bottom: 180px; left: auto; right: max(16px, env(safe-area-inset-right)); align-items: flex-end; }
+body.touch #center { top: 22%; }
+body.touch #scoreboard { display: none; }
+@media (max-height: 420px) { body.touch .panel { padding: 16px; } body.touch h1 { font-size: 30px; } }

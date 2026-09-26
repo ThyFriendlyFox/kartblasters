@@ -3,6 +3,7 @@ import { Net } from './net.js';
 import { Game, COLORS } from './game.js';
 import { RaceGame } from './race.js';
 import { Sfx } from './audio.js';
+import { isTouchDevice, requestMotionPermission, enterLandscape, MobileInput } from './mobile.js';
 import { CARS, CAR_IDS, carThumbnail } from './cars.js';
 import { TRACKS, TRACK_IDS } from './trackdefs.js';
 
@@ -128,11 +129,24 @@ function playerInfo() {
 }
 
 const sfx = new Sfx();
+const touch = isTouchDevice();
+if (touch) document.body.classList.add('touch');
+// Phones: ask for tilt permission (iOS) and go landscape. Must run inside the tap.
+const phoneSetup = () => {
+  if (!touch) return;
+  requestMotionPermission();
+  enterLandscape();
+};
+for (const id of ['host', 'join', 'practice']) $(id).addEventListener('click', phoneSetup, { capture: true });
 
 function start(net, code, opts) {
   $('menu').classList.add('hidden');
   const info = playerInfo();
   const args = { net, sfx, code, ...info, ...opts };
+  if (touch) {
+    args.mobile = new MobileInput(opts.mode);
+    document.body.classList.add('ingame');
+  }
   const game = opts.mode === 'race' ? new RaceGame(args) : new Game(args);
   window.__game = game;
   if (code) history.replaceState(null, '', `?room=${code}`);

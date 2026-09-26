@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#0b0d14" />
     <title>Kart Blasters</title>
     <meta name="description" content="Peer-to-peer multiplayer go-kart combat in your browser." />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>" />
@@ -143,6 +146,8 @@
         <button id="leave" class="ghost">Leave game</button>
       </div>
     </div>
+
+    <div id="rotate" class="overlay"><div class="panel small"><div style="font-size:52px">📱↻</div><h2>Turn your phone sideways</h2><p>Hold it like a steering wheel: tilt to steer, tilt forward for gas and back to brake.</p></div></div>
 
     <div id="ended" class="overlay hidden">
       <div class="panel small">

@@ -641,7 +641,8 @@ class RaceBrain {
 // ------------------------------------------------------------------ game
 
 export class RaceGame {
-  constructor({ net, name, color, car, botCount = 0, sfx, code, map, laps = 3, welcome }) {
+  constructor({ net, name, color, car, botCount = 0, sfx, code, map, laps = 3, welcome, mobile = null }) {
+    this.mobile = mobile;
     this.net = net;
     this.sfx = sfx;
     this.code = code;
@@ -650,7 +651,7 @@ export class RaceGame {
     document.body.classList.add('mode-race');
 
     const renderer = (this.renderer = new THREE.WebGLRenderer({ antialias: true }));
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -756,7 +757,19 @@ export class RaceGame {
     document.getElementById('resume').addEventListener('click', () => {
       this.paused = false;
       overlay.classList.add('hidden');
+      if (this.mobile) {
+        this.mobile.setVisible(true);
+        this.mobile.calibrate();
+      }
     });
+    if (this.mobile) {
+      overlay.querySelector('p').textContent = 'Tilt to steer, tilt forward for gas and back to brake. In the air, tap the left/right side of the screen to spin or DRIFT to flip. Hold the phone how you like to drive, then tap Play.';
+      this.mobile.onPause = () => {
+        this.paused = true;
+        this.mobile.setVisible(false);
+        overlay.classList.remove('hidden');
+      };
+    }
     document.getElementById('leave').addEventListener('click', () => this.exit());
     document.getElementById('startRace').addEventListener('click', () => this.hostStart());
     document.addEventListener('keydown', (e) => {
@@ -803,6 +816,7 @@ export class RaceGame {
     this.edgeSpin = 0;
     this.edgeFlip = false;
     if (this.paused) return { throttle: 0, steer: 0, boost: false, drift: false, spin: 0, flip: false };
+    if (this.mobile) return this.mobile.read();
     return {
       throttle: (on('KeyW', 'ArrowUp') ? 1 : 0) - (on('KeyS', 'ArrowDown') ? 1 : 0),
       steer: (on('KeyA', 'ArrowLeft') ? 1 : 0) - (on('KeyD', 'ArrowRight') ? 1 : 0),
