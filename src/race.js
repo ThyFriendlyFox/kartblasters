@@ -763,7 +763,7 @@ export class RaceGame {
       }
     });
     if (this.mobile) {
-      overlay.querySelector('p').textContent = 'In the air, tap left/right of the screen to spin or DRIFT to flip. With tilt on, tap Play while holding the phone how you like to drive.';
+      overlay.querySelector('p').textContent = 'In the air, tap left/right of the screen to spin or DRIFT to flip. If tilt steering is on, tap Play while holding the phone how you like to drive.';
       this.mobile.onPause = () => {
         this.paused = true;
         this.mobile.setVisible(false);

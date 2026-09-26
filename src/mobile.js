@@ -62,9 +62,10 @@ export class MobileInput {
     this.stick = null; // virtual joystick state
     this.enabled = true;
     try {
-      this.useTilt = localStorage.getItem(TILT_KEY) !== '0';
+      // Joystick by default; tilt steering is opt-in from the pause menu
+      this.useTilt = localStorage.getItem(TILT_KEY) === '1';
     } catch {
-      this.useTilt = true;
+      this.useTilt = false;
     }
 
     document.body.classList.add('touch');
@@ -229,6 +230,7 @@ export class MobileInput {
   }
 
   setTilt(on) {
+    if (on) requestMotionPermission(); // iOS prompts here, inside the checkbox tap
     this.useTilt = on;
     try {
       localStorage.setItem(TILT_KEY, on ? '1' : '0');

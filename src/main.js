@@ -131,10 +131,11 @@ function playerInfo() {
 const sfx = new Sfx();
 const touch = isTouchDevice();
 if (touch) document.body.classList.add('touch');
-// Phones: ask for tilt permission (iOS) and go landscape. Must run inside the tap.
+// Phones: go fullscreen + landscape. Must run inside the tap.
+// (Tilt permission is only requested when tilt steering is switched on.)
 const phoneSetup = () => {
   if (!touch) return;
-  requestMotionPermission();
+  if (localStorage.getItem('kb-tilt') === '1') requestMotionPermission();
   enterLandscape();
 };
 for (const id of ['host', 'join', 'practice']) $(id).addEventListener('click', phoneSetup, { capture: true });

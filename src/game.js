@@ -264,7 +264,7 @@ export class Game {
         this.mobile.setVisible(false);
         overlay.classList.remove('hidden');
       };
-      overlay.querySelector('p').textContent = 'Drag to aim, hold to shoot. With tilt on, tap Play while holding the phone how you like to drive.';
+      overlay.querySelector('p').textContent = 'Drag to aim, hold to shoot. If tilt steering is on, tap Play while holding the phone how you like to drive.';
       document.getElementById('weaponBar').addEventListener('pointerdown', (e) => {
         const slot = e.target.closest('.wslot');
         if (!slot) return;

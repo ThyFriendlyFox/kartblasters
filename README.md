@@ -105,14 +105,13 @@ Take the jumps fast: if you come up short, you wipe out and respawn past the lan
 
 ### Playing on a phone
 
-Open the site on your phone and turn it sideways. The first tap asks for motion-sensor permission on iPhone.
+Open the site on your phone and turn it sideways.
 
-- **Steer:** rotate the phone like a steering wheel (clockwise = right).
-- **Gas / brake:** tilt the top of the phone away from you for gas, toward you to brake. "Neutral" is however you're holding the phone when the game starts; tap ⏸ then Play to re-center it.
+- **Drive** with the joystick on the left: sideways steers, up is gas, down is brake.
 - **Buttons:** NITRO/BOOST and DRIFT on the right, 🚀 rocket in battle, ⏸ top-left.
-- **Battle:** drag a finger anywhere to aim the turret. Holding the finger down fires. Tap the weapon bar to switch weapons.
+- **Battle:** drag a finger anywhere else on the screen to aim the turret; holding the finger down fires. Thumb on the joystick and a finger aiming works at the same time. Tap the weapon bar to switch weapons.
 - **Race tricks:** in the air, tap the left or right side of the screen to spin, or DRIFT to flip.
-- Prefer thumbs? Tap ⏸ and switch off **📱 Tilt steering**. A joystick on the left then drives the car (up = gas, down = brake), and the rest of the screen aims and shoots, so you can drive and shoot at the same time. The choice is remembered. The joystick also appears automatically if there's no motion sensor or permission was denied.
+- **Tilt steering (optional):** tap ⏸ and turn on **📱 Tilt steering**. Then rotate the phone like a steering wheel to steer, and tilt it forward for gas or back to brake. "Neutral" is however you're holding it when you tap Play. On iPhone this asks for motion-sensor permission. The choice is remembered.
 
 Tilt needs HTTPS, which Vercel provides.
 
