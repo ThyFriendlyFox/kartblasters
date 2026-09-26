@@ -17,6 +17,10 @@ Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no ga
 | Buggy | Punchy acceleration, great grip |
 | Brute | Slow, but takes a beating (135 HP) |
 | Longtail 17 | Gold 1970s long-tail endurance racer: highest top speed, a little less grip (90 HP). Always wears its gold #17 race livery; your color tints one side pinstripe |
+| Rockcrawler | Black six-wheeled luxury off-road pickup on knobby tyres: slow, very grippy, toughest in battle (145 HP). Stays black; your color is its wheel rings |
+| Sharkbite | Shark-shaped hot rod with open jaws, fins and a chrome blown engine: quick off the line |
+| Six Pack | Candy-paint six-wheeler hatch with the engine bursting through the hood, on redline tyres |
+| Dice Rod | Two-tone patina rat rod with dice air cleaners and wide whitewalls: punchy, a bit loose |
 
 ## Maps
 
@@ -116,6 +120,9 @@ Take the jumps fast: if you come up short, you wipe out and respawn past the lan
   | Buggy | Flat-4 (boxer thrum) |
   | Brute | Big-block V8 (deep) |
   | Longtail 17 | Flat-12 (high-revving scream) |
+  | Rockcrawler | Twin-turbo V8 (smooth, deep) |
+  | Sharkbite, Six Pack | Blown V8 (lumpy cam) |
+  | Dice Rod | Rodded old-school V8 (low rumble) |
 
 - **Music:** a procedurally generated soundtrack, with one tune per map style and one for battle. Toggle it with the 🎵 checkbox in the menu or pause screen, or press **N**. **M** mutes everything.
 

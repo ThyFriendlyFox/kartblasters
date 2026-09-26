@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildLongtail, longtailRim, LONGTAIL_WHEELS } from './longtail.js';
+import { buildSixBySix, buildShark, buildSixPack, buildDiceRod } from './cars2.js';
 
 /** Selectable cars. Stats are multipliers used by both battle and race physics. */
 export const CARS = {
@@ -9,6 +10,10 @@ export const CARS = {
   buggy: { name: 'Buggy', desc: 'Punchy acceleration, great grip', speed: 0.95, accel: 1.15, grip: 1.1, hp: 100 },
   truck: { name: 'Brute', desc: 'Slow, but takes a beating', speed: 0.92, accel: 0.88, grip: 0.95, hp: 135 },
   longtail: { name: 'Longtail 17', desc: 'Gold 70s endurance racer, flat-12', speed: 1.09, accel: 0.97, grip: 0.97, hp: 90 },
+  sixbysix: { name: 'Rockcrawler', desc: 'Six-wheeled off-road pickup: grippy tank', speed: 0.93, accel: 0.92, grip: 1.12, hp: 145 },
+  shark: { name: 'Sharkbite', desc: 'Shark hot rod with a blown V8', speed: 1.02, accel: 1.1, grip: 0.97, hp: 95 },
+  sixpack: { name: 'Six Pack', desc: 'Six-wheeled hatch, engine through the hood', speed: 1.03, accel: 1.02, grip: 1.08, hp: 105 },
+  dicerod: { name: 'Dice Rod', desc: 'Patina rat rod on whitewalls', speed: 1.0, accel: 1.12, grip: 0.92, hp: 100 },
 };
 export const CAR_IDS = Object.keys(CARS);
 
@@ -57,6 +62,7 @@ export function buildCar(type, color) {
   // Per-type wheel layout: [radius, width, frontZ, rearZ, track, rearScale]
   let wheel = [0.45, 0.4, 1.3, -1.3, 1.05, 1];
   let roofY = 1.4;
+  let custom = null; // detailed cars bring their own axles, tyres, rims, lights and exhausts
 
   switch (type) {
     case 'muscle': {
@@ -124,6 +130,14 @@ export function buildCar(type, color) {
       roofY = 1.3;
       break;
     }
+    case 'sixbysix':
+    case 'shark':
+    case 'sixpack':
+    case 'dicerod': {
+      custom = { sixbysix: buildSixBySix, shark: buildShark, sixpack: buildSixPack, dicerod: buildDiceRod }[type](body, color);
+      roofY = custom.roofY;
+      break;
+    }
     default: {
       // hyper
       wheel = [0.44, 0.42, 1.4, -1.35, 1.0, 1.08];
@@ -138,7 +152,7 @@ export function buildCar(type, color) {
   }
 
   // Lights (truck and longtail have their own)
-  if (type !== 'truck' && type !== 'longtail') {
+  if (type !== 'truck' && type !== 'longtail' && !custom) {
     const fz = { muscle: 2.25, formula: 2.0, buggy: 1.95 }[type] ?? 2.3;
     const fy = { buggy: 0.95, formula: 0.5 }[type] ?? 0.65;
     add(box(0.4, 0.14, 0.08), head, 0.6, fy, fz);
@@ -146,7 +160,7 @@ export function buildCar(type, color) {
   }
   const rz = { muscle: -2.27, formula: -1.95, buggy: -1.72, truck: -2.37, longtail: -2.4 }[type] ?? -2.27;
   const ry = { buggy: 0.9, truck: 1.3 }[type] ?? 0.7;
-  if (type !== 'longtail') {
+  if (type !== 'longtail' && !custom) {
     add(box(0.5, 0.14, 0.08), tail, 0.6, ry, rz);
     add(box(0.5, 0.14, 0.08), tail, -0.6, ry, rz);
   }
@@ -157,27 +171,34 @@ export function buildCar(type, color) {
   const frontPivots = [];
   const tireMat = new THREE.MeshStandardMaterial({ color: '#111', roughness: 0.9 });
   const rimMat = new THREE.MeshStandardMaterial({ color: type === 'truck' ? '#888' : '#e5e7eb', metalness: 0.9, roughness: 0.2 });
-  for (const [x, z, front] of [[track, fz, true], [-track, fz, true], [track, rz2, false], [-track, rz2, false]]) {
-    const sc = front ? 1 : rs;
-    const pivot = new THREE.Group();
-    pivot.position.set(x, r * sc, z);
-    body.add(pivot);
-    const tire = new THREE.Mesh(new THREE.CylinderGeometry(r * sc, r * sc, w, 18).rotateZ(Math.PI / 2), tireMat);
-    tire.castShadow = true;
-    if (type === 'longtail') longtailRim(tire, r * sc, w);
-    else tire.add(new THREE.Mesh(new THREE.CylinderGeometry(r * sc * 0.6, r * sc * 0.6, w + 0.02, 6).rotateZ(Math.PI / 2), rimMat));
-    pivot.add(tire);
-    wheels.push(tire);
-    if (front) frontPivots.push(pivot);
+  const axles = custom?.axles || [
+    { z: fz, r, w, track, steer: true },
+    { z: rz2, r: r * rs, w, track, steer: false },
+  ];
+  for (const ax of axles) {
+    for (const x of [ax.track, -ax.track]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(x, ax.r, ax.z);
+      body.add(pivot);
+      const geo = custom?.tire ? custom.tire(ax.r, ax.w) : new THREE.CylinderGeometry(ax.r, ax.r, ax.w, 18).rotateZ(Math.PI / 2);
+      const tire = new THREE.Mesh(geo, tireMat);
+      tire.castShadow = true;
+      if (custom) custom.rim(tire, ax.r, ax.w);
+      else if (type === 'longtail') longtailRim(tire, ax.r, ax.w);
+      else tire.add(new THREE.Mesh(new THREE.CylinderGeometry(ax.r * 0.6, ax.r * 0.6, ax.w + 0.02, 6).rotateZ(Math.PI / 2), rimMat));
+      pivot.add(tire);
+      wheels.push(tire);
+      if (ax.steer) frontPivots.push(pivot);
+    }
   }
 
   // Boost flames
   const flameMat = new THREE.MeshBasicMaterial({ color: '#7fdcff', transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
   const flames = [];
-  for (const x of [0.4, -0.4]) {
+  for (const [x, y, z] of custom?.flames || [[0.4, 0.6, rz - 0.8], [-0.4, 0.6, rz - 0.8]]) {
     const f = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.4, 8), flameMat);
     f.rotation.x = -Math.PI / 2;
-    f.position.set(x, 0.6, rz - 0.8);
+    f.position.set(x, y, custom ? z - 0.5 : z);
     f.visible = false;
     body.add(f);
     flames.push(f);

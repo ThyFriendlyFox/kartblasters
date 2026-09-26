@@ -771,7 +771,7 @@ export class RaceGame {
   addBot(i) {
     const id = `bot-${i}`;
     const palette = COLORS.filter((c) => c !== this.me.color);
-    const c = this.addCar(id, BOT_NAMES[i % BOT_NAMES.length], palette[(i + 2) % palette.length], CAR_IDS[i % CAR_IDS.length], { bot: true });
+    const c = this.addCar(id, BOT_NAMES[i % BOT_NAMES.length], palette[(i + 2) % palette.length], CAR_IDS[Math.floor(Math.random() * CAR_IDS.length)], { bot: true });
     c.topMul = 0.9 + Math.random() * 0.08;
     this.bots.push({ car: c, brain: new RaceBrain() });
   }

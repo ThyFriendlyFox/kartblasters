@@ -363,7 +363,7 @@ kbd {
 /* ---------- menu: cars / mode ---------- */
 #carPick {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   margin: 6px 0 10px;
 }
@@ -445,7 +445,7 @@ label.check input { width: 18px; height: 18px; margin: 0; accent-color: var(--ac
 label.check small { width: 100%; color: var(--muted); font-weight: 500; padding-left: 26px; margin-top: -4px; }
 #clickToPlay .panel.small:has(#carSwap:not(.hidden)) { width: min(520px, 100%); }
 #carSwap { text-align: left; margin: 6px 0 14px; }
-.swapGrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 6px 0 8px; }
+.swapGrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 6px 0 8px; }
 @media (max-width: 480px) { .swapGrid { grid-template-columns: repeat(3, 1fr); } }
 .swapGrid .carBtn img { max-width: 72px; }
 .swapGrid .carBtn.current:not(.on) { border-color: rgba(255, 255, 255, 0.25); }

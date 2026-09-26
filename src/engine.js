@@ -17,10 +17,16 @@ export const ENGINES = {
   flat4: { label: 'Flat-4', fire: [0, 180, 360, 540], amp: [1, 0.8, 0.95, 0.75], jitter: 8, uneven: [0, 12, -8, 6], res: 140, res2: 400, idle: 850, redline: 5400, body: 0.9 },
   // Flat-12: twelve even pulses, high-revving and raspy
   flat12: { label: 'Flat-12', fire: even(12), amp: [1, 0.9, 0.97, 0.86, 1, 0.92, 0.98, 0.88, 1, 0.9, 0.96, 0.87], jitter: 3, res: 240, res2: 610, idle: 1000, redline: 7200, body: 0.75 },
+  // Twin-turbo V8: smooth and deep, muffled by the turbos
+  ttv8: { label: 'Twin-turbo V8', fire: [0, 90, 180, 270, 360, 450, 540, 630], amp: [1, 0.78, 0.94, 0.74, 1, 0.8, 0.9, 0.72], jitter: 3, res: 100, res2: 290, idle: 650, redline: 5600, body: 1.1 },
+  // Supercharged big-cam V8: lumpy, loping idle
+  blown: { label: 'Blown V8', fire: [0, 90, 180, 270, 360, 450, 540, 630], amp: [1, 0.45, 0.95, 0.4, 1, 0.55, 0.9, 0.38], jitter: 11, res: 92, res2: 270, idle: 820, redline: 6200, body: 1.25 },
+  // Old flathead-style V8: low, rumbly and a little ragged
+  flathead: { label: 'Rodded V8', fire: [0, 90, 180, 270, 360, 450, 540, 630], amp: [1, 0.58, 0.9, 0.5, 1, 0.62, 0.86, 0.48], jitter: 9, res: 80, res2: 230, idle: 560, redline: 4800, body: 1.2 },
   bigv8: { label: 'Big-block V8', fire: [0, 90, 180, 270, 360, 450, 540, 630], amp: [1, 0.55, 0.95, 0.5, 1, 0.65, 0.9, 0.45], jitter: 7, res: 85, res2: 240, idle: 600, redline: 4300, body: 1.15 },
 };
 
-export const CAR_ENGINES = { hyper: 'v12', muscle: 'v8', formula: 'v10', buggy: 'flat4', truck: 'bigv8', longtail: 'flat12' };
+export const CAR_ENGINES = { hyper: 'v12', muscle: 'v8', formula: 'v10', buggy: 'flat4', truck: 'bigv8', longtail: 'flat12', sixbysix: 'ttv8', shark: 'blown', sixpack: 'blown', dicerod: 'flathead' };
 
 const WORKLET = `
 class EngineProcessor extends AudioWorkletProcessor {
