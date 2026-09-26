@@ -763,7 +763,7 @@ export class RaceGame {
       }
     });
     if (this.mobile) {
-      overlay.querySelector('p').textContent = 'Tilt to steer, tilt forward for gas and back to brake. In the air, tap the left/right side of the screen to spin or DRIFT to flip. Hold the phone how you like to drive, then tap Play.';
+      overlay.querySelector('p').textContent = 'In the air, tap left/right of the screen to spin or DRIFT to flip. With tilt on, tap Play while holding the phone how you like to drive.';
       this.mobile.onPause = () => {
         this.paused = true;
         this.mobile.setVisible(false);

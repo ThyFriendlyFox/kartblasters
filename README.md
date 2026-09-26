@@ -112,7 +112,7 @@ Open the site on your phone and turn it sideways. The first tap asks for motion-
 - **Buttons:** NITRO/BOOST and DRIFT on the right, 🚀 rocket in battle, ⏸ top-left.
 - **Battle:** drag a finger anywhere to aim the turret. Holding the finger down fires. Tap the weapon bar to switch weapons.
 - **Race tricks:** in the air, tap the left or right side of the screen to spin, or DRIFT to flip.
-- No motion sensor (or permission denied)? A virtual joystick appears bottom-left instead.
+- Prefer thumbs? Tap ⏸ and switch off **📱 Tilt steering**. A joystick on the left then drives the car (up = gas, down = brake), and the rest of the screen aims and shoots, so you can drive and shoot at the same time. The choice is remembered. The joystick also appears automatically if there's no motion sensor or permission was denied.
 
 Tilt needs HTTPS, which Vercel provides.
 

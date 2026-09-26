@@ -9,8 +9,10 @@ export const isTouchDevice = () =>
   typeof window !== 'undefined' && (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) && navigator.maxTouchPoints > 0;
 
 const DEG = Math.PI / 180;
-const STEER_DEAD = 3 * DEG, STEER_FULL = 24 * DEG;
-const PITCH_DEAD = 4 * DEG, PITCH_FULL = 16 * DEG;
+// Small tilts matter: tight dead zones, full input well before the phone is awkward
+const STEER_DEAD = 1.5 * DEG, STEER_FULL = 13 * DEG;
+const PITCH_DEAD = 2 * DEG, PITCH_FULL = 9 * DEG;
+const TILT_KEY = 'kb-tilt';
 
 /** Must be called from a tap (iOS asks the user for motion permission). */
 export async function requestMotionPermission() {
@@ -34,10 +36,11 @@ export async function enterLandscape() {
 }
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+// Past the dead zone, a square-root curve gives a strong response to small tilts
 const shape = (v, dead, full) => {
   const a = Math.abs(v);
   if (a < dead) return 0;
-  return Math.sign(v) * Math.min(1, (a - dead) / (full - dead));
+  return Math.sign(v) * Math.sqrt(Math.min(1, (a - dead) / (full - dead)));
 };
 
 export class MobileInput {
@@ -56,26 +59,32 @@ export class MobileInput {
     this.pitch0 = null;
     this.hasTilt = false;
     this.lastTilt = 0;
-    this.stick = null; // virtual joystick fallback state
+    this.stick = null; // virtual joystick state
     this.enabled = true;
+    try {
+      this.useTilt = localStorage.getItem(TILT_KEY) !== '0';
+    } catch {
+      this.useTilt = true;
+    }
 
     document.body.classList.add('touch');
     this.buildUI();
     this.onOrient = (e) => this.handleOrientation(e);
     window.addEventListener('deviceorientation', this.onOrient);
+    this.bindToggle();
+    this.refreshStick();
     // No tilt data shortly after starting? Show the virtual joystick instead.
-    setTimeout(() => {
-      if (!this.hasTilt) this.showStick(true);
-    }, 1500);
+    setTimeout(() => this.refreshStick(), 1500);
   }
 
   // ---------------- tilt ----------------
 
   handleOrientation(e) {
     if (e.beta == null || e.gamma == null) return;
+    const first = !this.hasTilt;
     this.hasTilt = true;
     this.lastTilt = performance.now();
-    this.showStick(false);
+    if (first) this.refreshStick();
     const b = e.beta * DEG, g = e.gamma * DEG;
     // Gravity ("down") in device coordinates from the W3C beta/gamma angles
     const dx = Math.sin(g) * Math.cos(b), dy = -Math.sin(b), dz = -Math.cos(g) * Math.cos(b);
@@ -211,6 +220,27 @@ export class MobileInput {
     this.stickThrottle = -shape(y, 0.15, 0.85);
   }
 
+  /** Pause-menu switch: tilt steering on, or joystick on the left. */
+  bindToggle() {
+    const box = document.getElementById('tiltToggle');
+    if (!box) return;
+    box.checked = this.useTilt;
+    box.addEventListener('change', () => this.setTilt(box.checked));
+  }
+
+  setTilt(on) {
+    this.useTilt = on;
+    try {
+      localStorage.setItem(TILT_KEY, on ? '1' : '0');
+    } catch {}
+    this.refreshStick();
+  }
+
+  /** The joystick shows when tilt is switched off or there's no motion sensor. */
+  refreshStick() {
+    this.showStick(!this.useTilt || !this.hasTilt);
+  }
+
   showStick(on) {
     if (this.stickShown === on) return;
     this.stickShown = on;
@@ -220,7 +250,7 @@ export class MobileInput {
 
   /** Per-frame: read current controls. */
   read() {
-    const useStick = !this.hasTilt || performance.now() - this.lastTilt > 2000;
+    const useStick = !this.useTilt || !this.hasTilt || performance.now() - this.lastTilt > 2000;
     const steer = useStick ? this.stickSteer || 0 : this.tiltSteer || 0;
     const throttle = useStick ? this.stickThrottle || 0 : this.tiltThrottle || 0;
     // Tilt meter shows what the phone is doing

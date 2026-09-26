@@ -546,3 +546,17 @@ body.touch.mode-race #killfeed { top: auto; bottom: 180px; left: auto; right: ma
 body.touch #center { top: 22%; }
 body.touch #scoreboard { display: none; }
 @media (max-height: 420px) { body.touch .panel { padding: 16px; } body.touch h1 { font-size: 30px; } }
+
+.touchOnly { display: none !important; }
+body.touch .touchOnly { display: flex !important; margin: 4px 0 14px; text-align: left; }
+body.touch #tStick { width: 150px; height: 150px; bottom: 18px; }
+body.touch #tStick .knob { width: 62px; height: 62px; }
+@media (max-height: 500px) {
+  body.touch #clickToPlay .panel { padding: 14px 18px; }
+  body.touch #clickToPlay h2 { margin-bottom: 4px; }
+  body.touch #clickToPlay p { font-size: 13px; margin: 4px 0; }
+  body.touch .swapGrid .carBtn { padding: 2px 2px 4px; }
+  body.touch .swapGrid .carBtn img { max-width: 44px; }
+  body.touch .swapGrid .carBtn span { font-size: 11px; }
+  body.touch #carSwap { margin: 2px 0 8px; }
+}
