@@ -1,8 +1,30 @@
-/** Synthesized sound effects via WebAudio (no asset files needed). */
+import { createEngine, Gearbox, ENGINES, CAR_ENGINES } from './engine.js';
+import { Music } from './music.js';
+
+const store = {
+  get(k, d) {
+    try {
+      return localStorage.getItem(k) ?? d;
+    } catch {
+      return d;
+    }
+  },
+  set(k, v) {
+    try {
+      localStorage.setItem(k, v);
+    } catch {}
+  },
+};
+
+/** Synthesized sound effects, engine and music via WebAudio (no asset files needed). */
 export class Sfx {
   constructor() {
     this.ctx = null;
     this.muted = false;
+    this.musicOn = store.get('kb-music', '1') === '1';
+    this.gearbox = new Gearbox();
+    this.engineSpec = ENGINES.v12;
+    this.wantTrack = 'menu';
   }
 
   init() {
@@ -22,21 +44,38 @@ export class Sfx {
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
 
-    // Engine: two detuned saws through a lowpass
-    this.engGain = ctx.createGain();
-    this.engGain.gain.value = 0;
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 600;
-    this.engOsc = [ctx.createOscillator(), ctx.createOscillator()];
-    this.engOsc.forEach((o, i) => {
-      o.type = 'sawtooth';
-      o.frequency.value = 50 + i * 3;
-      o.connect(lp);
-      o.start();
-    });
-    lp.connect(this.engGain);
-    this.engGain.connect(this.master);
+    // Engine: firing-pulse synth in an AudioWorklet
+    createEngine(ctx, this.master)
+      .then((node) => {
+        this.eng = node;
+        if (node) node.port.postMessage(this.engineSpec);
+      })
+      .catch((e) => console.warn('engine audio unavailable', e));
+
+    this.music = new Music(ctx, this.master, this.noise);
+    this.music.setEnabled(this.musicOn);
+    this.music.play(this.wantTrack);
+  }
+
+  /** Choose the engine that matches a car. */
+  setCar(carType) {
+    this.engineSpec = ENGINES[CAR_ENGINES[carType]] || ENGINES.v12;
+    this.eng?.port.postMessage(this.engineSpec);
+  }
+
+  playMusic(name) {
+    this.wantTrack = name;
+    this.music?.play(name);
+  }
+
+  setMusic(on) {
+    this.musicOn = on;
+    store.set('kb-music', on ? '1' : '0');
+    this.music?.setEnabled(on);
+    for (const id of ['musicToggle', 'musicToggleMenu']) {
+      const el = document.getElementById(id);
+      if (el) el.checked = on;
+    }
   }
 
   /** Continuous tire screech while drifting (level 0..1). */
@@ -66,13 +105,17 @@ export class Sfx {
     if (this.master) this.master.gain.value = m ? 0 : 0.45;
   }
 
-  engine(speed, boosting, alive) {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
-    const f = 45 + Math.abs(speed) * 3.2 + (boosting ? 40 : 0);
-    this.engOsc[0].frequency.setTargetAtTime(f, t, 0.05);
-    this.engOsc[1].frequency.setTargetAtTime(f * 1.5 + 2, t, 0.05);
-    this.engGain.gain.setTargetAtTime(alive ? 0.05 + Math.min(Math.abs(speed), 40) * 0.0025 : 0, t, 0.1);
+  /**
+   * Drive the engine sound. speedNorm = speed / top speed, throttle -1..1.
+   */
+  engine(dt, speedNorm, throttle, boosting, on) {
+    if (!this.eng) return;
+    const { rpm, load } = this.gearbox.update(dt, Math.abs(speedNorm), throttle, this.engineSpec, boosting);
+    const p = this.eng.parameters, t = this.ctx.currentTime;
+    p.get('rpm').setTargetAtTime(rpm, t, 0.03);
+    p.get('load').setTargetAtTime(load, t, 0.05);
+    // Kept well under the effects and music
+    p.get('gain').setTargetAtTime(on ? 0.1 + 0.08 * load : 0, t, 0.1);
   }
 
   tone(type, f0, f1, dur, vol) {

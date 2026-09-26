@@ -63,6 +63,7 @@
           </div>
         </div>
         <button id="practice" class="ghost">Practice offline vs AI</button>
+        <label class="check musicRow"><input type="checkbox" id="musicToggleMenu" checked /> 🎵 Music</label>
         <div id="menuStatus"></div>
 
         <div class="controls" id="ctlRace">
@@ -72,7 +73,7 @@
           <div><kbd>Shift</kbd> nitro</div>
           <div><kbd>A</kbd><kbd>D</kbd>/<kbd>Space</kbd> in air: tricks</div>
           <div><kbd>R</kbd> recenter</div>
-          <div><kbd>Esc</kbd> pause</div>
+          <div><kbd>Esc</kbd> pause · <kbd>N</kbd> music</div>
         </div>
         <div class="controls hidden" id="ctlBattle">
           <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive</div>
@@ -83,7 +84,7 @@
           <div><kbd>Shift</kbd> boost</div>
           <div><kbd>Space</kbd> drift</div>
           <div><kbd>Tab</kbd> scores</div>
-          <div><kbd>M</kbd> mute</div>
+          <div><kbd>M</kbd> mute · <kbd>N</kbd> music</div>
         </div>
       </div>
     </div>
@@ -138,6 +139,7 @@
         <h2>Paused</h2>
         <p>Click to take the wheel. Mouse aims, <kbd>Esc</kbd> frees the cursor.</p>
         <label class="check touchOnly"><input type="checkbox" id="tiltToggle" /> 📱 Tilt steering <small>On = rotate the phone like a steering wheel, tilt forward for gas and back to brake (instead of the joystick)</small></label>
+        <label class="check"><input type="checkbox" id="musicToggle" checked /> 🎵 Music <small>N toggles it any time</small></label>
         <div id="carSwap" class="hidden">
           <div class="label">Change car</div>
           <div class="swapGrid"></div>

@@ -560,3 +560,5 @@ body.touch #tStick .knob { width: 62px; height: 62px; }
   body.touch .swapGrid .carBtn span { font-size: 11px; }
   body.touch #carSwap { margin: 2px 0 8px; }
 }
+label.musicRow { justify-content: center; margin: 12px 0 0; }
+#clickToPlay label.check { text-align: left; margin: 6px 0 10px; }

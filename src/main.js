@@ -129,6 +129,7 @@ function playerInfo() {
 }
 
 const sfx = new Sfx();
+window.__sfx = sfx;
 const touch = isTouchDevice();
 if (touch) document.body.classList.add('touch');
 // Phones: go fullscreen + landscape. Must run inside the tap.
@@ -140,6 +141,23 @@ const phoneSetup = () => {
 };
 for (const id of ['host', 'join', 'practice']) $(id).addEventListener('click', phoneSetup, { capture: true });
 
+// Music: starts on the first tap/click (browsers block audio before that)
+document.addEventListener('pointerdown', () => sfx.init(), { once: true, capture: true });
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyN' && !(e.target instanceof HTMLInputElement)) {
+    sfx.init();
+    sfx.setMusic(!sfx.musicOn);
+  }
+});
+for (const id of ['musicToggleMenu', 'musicToggle']) {
+  const box = $(id);
+  box.checked = sfx.musicOn;
+  box.addEventListener('change', () => {
+    sfx.init();
+    sfx.setMusic(box.checked);
+  });
+}
+
 function start(net, code, opts) {
   $('menu').classList.add('hidden');
   const info = playerInfo();
@@ -150,6 +168,7 @@ function start(net, code, opts) {
   }
   const game = opts.mode === 'race' ? new RaceGame(args) : new Game(args);
   window.__game = game;
+  window.__sfx = sfx;
   if (code) history.replaceState(null, '', `?room=${code}`);
 }
 

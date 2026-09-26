@@ -694,6 +694,8 @@ export class RaceGame {
     }
 
     this.hud.show();
+    this.sfx.setCar(this.me.carType);
+    this.sfx.playMusic(this.track.def.theme);
     window.addEventListener('resize', () => this.onResize());
     this.last = performance.now();
     requestAnimationFrame((t) => this.frame(t));
@@ -1040,6 +1042,7 @@ export class RaceGame {
     const canDrive = !frozen && this.phase !== 'spectate';
     if (canDrive) {
       const input = me.finished && racing ? (this.autopilot ||= new RaceBrain()).think(dt, me, this.track, all, this.fr) : this.readInput();
+      this.lastThrottle = input.throttle;
       const prevLap = me.lap;
       const ev = me.step(dt, input, this.track, all, this.fr);
       this.carEvents(me, ev, true);
@@ -1098,7 +1101,7 @@ export class RaceGame {
     this.sendSnapshot(now);
     this.updateCamera(dt);
     this.updateHud(now);
-    this.sfx.engine(me.v * 0.8, me.boosting, true);
+    this.sfx.engine(dt, me.v / (BASE_TOP * me.stats.speed), this.lastThrottle || 0, me.boosting || me.padT > 0, !me.crashT);
   }
 
   carEvents(c, ev, isMe) {

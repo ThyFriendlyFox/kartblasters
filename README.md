@@ -103,6 +103,20 @@ Take the jumps fast: if you come up short, you wipe out and respawn past the lan
 
 **Practice offline vs AI** runs either mode with no network at all.
 
+### Sound
+
+- **Engines:** every car has its own synthesized engine, built from real firing pulses through an exhaust resonance and a muffler, with a 6-speed gearbox and crackles when you lift off the gas.
+
+  | Car | Engine |
+  | --- | --- |
+  | Hyper | V12 (smooth) |
+  | Muscle | Cross-plane V8 (burble) |
+  | Formula | V10 (rasp) |
+  | Buggy | Flat-4 (boxer thrum) |
+  | Brute | Big-block V8 (deep) |
+
+- **Music:** a procedurally generated soundtrack, with one tune per map style and one for battle. Toggle it with the 🎵 checkbox in the menu or pause screen, or press **N**. **M** mutes everything.
+
 ### Playing on a phone
 
 Open the site on your phone and turn it sideways.

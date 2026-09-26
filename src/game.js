@@ -82,6 +82,8 @@ export class Game {
     }
 
     this.hud.show();
+    this.sfx.setCar(this.me.carType);
+    this.sfx.playMusic('battle');
     window.addEventListener('resize', () => this.onResize());
     this.last = performance.now();
     requestAnimationFrame((t) => this.frame(t));
@@ -229,6 +231,7 @@ export class Game {
       const car = this.pendingCar;
       this.pendingCar = null;
       if (k.setCar(car)) {
+        this.sfx.setCar(car);
         this.players.get(k.id).car = car;
         this.net.send({ t: 'car', car });
         this.hud.toast(`Now driving: ${CARS[car].name}`);
@@ -1211,6 +1214,7 @@ export class Game {
     // Local player
     if (me.alive) {
       const input = this.readInput();
+      this.lastThrottle = input.throttle;
       const ev = me.simulate(dt, input, this.world, all);
       this.kartEvents(me, ev);
       if (me.burnT > 0) {
@@ -1277,7 +1281,7 @@ export class Game {
     // Sound + HUD
     const f = me.forward(_b);
     const speed = me.vel.x * f.x + me.vel.z * f.z;
-    this.sfx.engine(speed, me.boosting, me.alive && this.locked);
+    this.sfx.engine(dt, speed / (30 * me.stats.speed), this.lastThrottle || 0, me.boosting, me.alive && this.locked);
     this.hud.stats(me, speed);
     this.hud.weaponBar(me);
     this.hud.tick(now);
