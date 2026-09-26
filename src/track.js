@@ -36,6 +36,10 @@ export class Path {
     this.kick = new Uint8Array(n);
     this.railL = new Uint8Array(n).fill(1);
     this.railR = new Uint8Array(n).fill(1);
+    // Lateral extent of the drawn road surface (a branch trims away the part
+    // that lies inside the main road at a fork or join)
+    this.clipL = new Float32Array(n).fill(-hw);
+    this.clipR = new Float32Array(n).fill(hw);
     this.color = [];
 
     const np = pts.length;
@@ -121,6 +125,36 @@ export class Path {
       }
     }
 
+    // Around each fork and join the main road is brought level (no lean and
+    // no banking), so it and the branch meet flat...
+    const lvl = new Float32Array(n).fill(1);
+    const RAMP = 30;
+    for (const z of level) {
+      let best = 0, bd = Infinity;
+      for (let i = 0; i < n; i++) {
+        const dd = v.fromArray(P, i * 3).distanceToSquared(z.pos);
+        if (dd < bd) (bd = dd), (best = i);
+      }
+      for (let j = -z.before - RAMP; j <= z.after + RAMP; j++) {
+        const out = j < -z.before ? -z.before - j : j > z.after ? j - z.after : 0;
+        const i = nb(best + Math.round(j / this.ds));
+        lvl[i] = Math.min(lvl[i], out / RAMP);
+      }
+    }
+    if (level.length) {
+      const up = new THREE.Vector3(), nv = new THREE.Vector3(), cr = new THREE.Vector3();
+      for (let i = 0; i < n; i++) {
+        if (lvl[i] >= 1) continue;
+        Ti.fromArray(T, i * 3);
+        up.set(0, 1, 0).addScaledVector(Ti, -Ti.y);
+        if (up.lengthSq() < 1e-4) continue;
+        up.normalize();
+        nv.copy(Nt[i]).applyAxisAngle(Ti, twistAt[i] + roll[i]);
+        const lean = Math.atan2(cr.crossVectors(nv, up).dot(Ti), nv.dot(up));
+        twistAt[i] += lean * (1 - lvl[i]);
+      }
+    }
+
     // Base frames (with twist correction and explicit roll)
     const Rv = new THREE.Vector3();
     const baseR = [];
@@ -140,27 +174,11 @@ export class Path {
       const kR = tB.sub(tA).divideScalar(4 * this.ds).dot(baseR[i]);
       bank[i] = THREE.MathUtils.clamp(kR * 16, -0.7, 0.7) * Math.max(0, Nt[i].y);
     }
-    // No banking where routes fork off / merge in, so both roads meet level:
-    // the main road is flattened around each fork and join...
-    const lvl = new Float32Array(n).fill(1);
-    const RAMP = 30;
-    for (const z of level) {
-      let best = 0, bd = Infinity;
-      for (let i = 0; i < n; i++) {
-        const dd = v.fromArray(P, i * 3).distanceToSquared(z.pos);
-        if (dd < bd) (bd = dd), (best = i);
-      }
-      for (let j = -z.before - RAMP; j <= z.after + RAMP; j++) {
-        const out = j < -z.before ? -z.before - j : j > z.after ? j - z.after : 0;
-        const i = nb(best + Math.round(j / this.ds));
-        lvl[i] = Math.min(lvl[i], out / RAMP);
-      }
-    }
     const W = 18;
     for (let i = 0; i < n; i++) {
       let acc = 0;
       for (let j = -W; j <= W; j++) acc += bank[nb(i + j)];
-      // ...and open routes start and end level (through their S-bends)
+      // ...and open routes don't bank through their S-bends at either end
       const EDGE = 110;
       const edge = closed ? lvl[i] : Math.min(1, (i * this.ds) / EDGE, ((n - 1 - i) * this.ds) / EDGE);
       Ti.fromArray(T, i * 3);
@@ -265,7 +283,7 @@ export class Path {
     return best;
   }
 
-  buildRoad(scene, theme, { startLine = false, lift = 0, onTop = false } = {}) {
+  buildRoad(scene, theme, { startLine = false, lift = 0, beneath = false } = {}) {
     const n = this.n, hw = this.hw;
     const STEP = 2; // mesh every 2 samples
     const rows = [];
@@ -295,7 +313,7 @@ export class Path {
 
     const P = new THREE.Vector3(), N = new THREE.Vector3(), R = new THREE.Vector3();
     const col = new THREE.Color();
-    const build = (list, uvScale, useColor, isRail = false) => {
+    const build = (list, uvScale, useColor, isRail = false, isRoad = false) => {
       const pos = [], uv = [], colors = [];
       for (let r = 0; r < rows.length - 1; r++) {
         const i0 = rows[r], i1 = rows[r + 1];
@@ -308,7 +326,10 @@ export class Path {
             P.fromArray(this.P, ii * 3);
             N.fromArray(this.N, ii * 3);
             R.fromArray(this.R, ii * 3);
-            P.addScaledVector(R, pt[0]).addScaledVector(N, pt[1] + lift);
+            let lat = pt[0];
+            if (isRoad && this.clipL[ii] > -hw) lat = Math.max(lat, this.clipL[ii]);
+            if (isRoad && this.clipR[ii] < hw) lat = Math.min(lat, this.clipR[ii]);
+            P.addScaledVector(R, lat).addScaledVector(N, pt[1] + lift);
             const vv = ((ii === 0 && r > 0 ? n : ii) * this.ds) / uvScale;
             quad.push([P.x, P.y, P.z, uu, vv, ii]);
           }
@@ -339,22 +360,23 @@ export class Path {
       metalness: neon ? 0.3 : 0.05,
       side: THREE.DoubleSide,
       emissive: neon ? '#0a1440' : '#000000',
-      // Branch roads share the fork area with the main road: draw them on top
-      // instead of letting the two coplanar surfaces flicker
-      polygonOffset: onTop,
-      polygonOffsetFactor: onTop ? -1 : 0,
-      polygonOffsetUnits: onTop ? -4 : 0,
+      // Where a branch road still overlaps the main road at a fork or join,
+      // the main road wins: it stays whole and the branch only shows where it
+      // flares out past the main road's edge
+      polygonOffset: beneath,
+      polygonOffsetFactor: beneath ? 1 : 0,
+      polygonOffsetUnits: beneath ? 4 : 0,
     });
     const railMat = neon
       ? new THREE.MeshStandardMaterial({ color: '#ffe600', emissive: '#b8a000', emissiveIntensity: 0.8, side: THREE.DoubleSide })
       : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, side: THREE.DoubleSide });
     const underMat = new THREE.MeshStandardMaterial({ color: neon ? '#101428' : '#c55e00', side: THREE.DoubleSide });
 
-    const roadMesh = new THREE.Mesh(build(strips.road, 16, true), roadMat);
+    const roadMesh = new THREE.Mesh(build(strips.road, 16, true, false, true), roadMat);
     roadMesh.receiveShadow = true;
     const railMesh = new THREE.Mesh(build(strips.rail, 16, !neon, true), railMat);
     railMesh.castShadow = true;
-    const underMesh = new THREE.Mesh(build(strips.under, 16, false), underMat);
+    const underMesh = new THREE.Mesh(build(strips.under, 16, false, false, true), underMat);
     underMesh.castShadow = true;
     scene.add(roadMesh, railMesh, underMesh);
 
@@ -403,7 +425,7 @@ export class Path {
     }
     const banner = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 4, 2.2, 0.6), new THREE.MeshBasicMaterial({ map: bannerTexture(neon) }));
     banner.position.copy(fr.P).addScaledVector(fr.N, 9);
-    banner.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(fr.R.clone().negate(), fr.N, fr.T.clone().negate()));
+    banner.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(fr.R, fr.N, fr.T.clone().negate()));
     scene.add(banner);
   }
 
@@ -479,6 +501,7 @@ export class Track extends Path {
       const br = { id: bi + 1, path, from: a, to: b, side, name: bd.name || 'ALT ROUTE', lock: bd.lock || null };
       br.fork = this.splitZone(path, a, +1);
       br.join = this.splitZone(path, b, -1);
+      this.trimBranchSurface(br);
       // Where the two roads overlap, the inner rails give way to one wide road...
       const mainRail = side > 0 ? this.railR : this.railL;
       for (let s = a - 1; s <= br.fork.gs + 0.5; s += this.ds) mainRail[this.idx(s)] = 0;
@@ -502,6 +525,36 @@ export class Track extends Path {
       this.branches.push(br);
     });
     for (const k of def.keys || []) this.keys.push({ id: k.id, s: markS(k.at), d: k.d || 0 });
+  }
+
+  /**
+   * Before the fork's gore (and after the join's), part of the branch lies
+   * inside the main road. Trim the branch's drawn surface back to the main
+   * road's edge, so the main road stays whole and the branch only appears
+   * where it flares out beside it.
+   */
+  trimBranchSurface(br) {
+    const path = br.path, fm = Path.newFrame(), fb = Path.newFrame(), rel = new THREE.Vector3();
+    for (let i = 0; i < path.n; i++) {
+      const bs = i * path.ds;
+      const atFork = bs <= br.fork.bs + 1;
+      if (!atFork && bs < br.join.bs - 1) continue;
+      path.frame(bs, fb);
+      // Main-road point alongside this branch sample
+      let sm = atFork ? br.from + bs : br.to - (path.L - bs);
+      for (let k = 0; k < 4; k++) {
+        this.frame(sm, fm);
+        sm += rel.copy(fb.P).sub(fm.P).dot(fm.T);
+      }
+      this.frame(sm, fm);
+      const dm = rel.copy(fb.P).sub(fm.P).dot(fm.R);
+      const cos = fb.R.dot(fm.R);
+      if (cos < 0.2) continue;
+      // Branch lateral where its cross-section meets the main road's edge
+      const lam = THREE.MathUtils.clamp((br.side * this.hw - dm) / cos, -this.hw, this.hw);
+      if (br.side > 0) path.clipL[i] = lam;
+      else path.clipR[i] = lam;
+    }
   }
 
   /**
@@ -571,7 +624,7 @@ export class Track extends Path {
     const theme = this.def.theme;
     buildEnvironment(scene, theme, this);
     this.buildRoad(scene, theme, { startLine: true });
-    for (const br of this.branches) br.path.buildRoad(scene, theme, { lift: 0.03, onTop: true });
+    for (const br of this.branches) br.path.buildRoad(scene, theme, { beneath: true });
     this.buildRouteProps(scene, theme);
   }
 
@@ -696,7 +749,15 @@ export class Track extends Path {
     const k = i * 2;
     const fm = Path.newFrame(), fb = Path.newFrame();
     this.frame(br.fork.gs + k, fm);
-    br.path.frame(br.fork.bs + k, fb);
+    // Branch point straight across from the main road, so the three posts
+    // stand in one line square to the main road
+    let bsx = br.fork.bs + k;
+    const rel = new THREE.Vector3();
+    for (let it = 0; it < 6; it++) {
+      br.path.frame(bsx, fb);
+      bsx -= rel.copy(fb.P).sub(fm.P).dot(fm.T) / Math.max(0.3, fb.T.dot(fm.T));
+    }
+    br.path.frame(bsx, fb);
     const neon = theme === 'neon';
     const H = 8;
     const postMat = new THREE.MeshStandardMaterial({ color: neon ? '#2a2f55' : '#5b6474', metalness: 0.3, roughness: 0.5 });
@@ -704,38 +765,56 @@ export class Track extends Path {
     const bar = (p, q, w, h, mat) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, p.distanceTo(q) + w), mat);
       m.position.copy(p).lerp(q, 0.5);
+      // lookAt needs an "up" that isn't parallel to the bar (posts are vertical)
+      if (Math.abs(q.y - p.y) > 0.99 * p.distanceTo(q)) m.up.set(0, 0, 1);
       m.lookAt(q);
       scene.add(m);
       return m;
     };
     const outM = fm.P.clone().addScaledVector(fm.R, -br.side * (this.hw + 0.9));
-    const mid = isl.A[i].clone().lerp(isl.B[i], 0.5);
+    const mid = fm.P.clone().addScaledVector(fm.R, br.side * this.hw).lerp(fb.P.clone().addScaledVector(fb.R, -br.side * this.hw), 0.5);
     const outB = fb.P.clone().addScaledVector(fb.R, br.side * (this.hw + 0.9));
     const tops = [];
     const pier = THREE.MathUtils.clamp(isl.A[i].distanceTo(isl.B[i]) - 1, 1.2, 4);
-    for (const [p, n, w] of [[outM, fm.N, 1.2], [mid, fm.N.clone().add(fb.N).normalize(), pier], [outB, fb.N, 1.2]]) {
-      const t = p.clone().addScaledVector(n, H);
-      bar(p.clone().addScaledVector(n, -0.5), t, w, w, postMat);
+    // A level gantry: upright posts with their tops at one height, even when
+    // one lane has already started to climb or dive
+    const UP = new THREE.Vector3(0, 1, 0);
+    const topY = Math.max(outM.y, mid.y, outB.y) + H;
+    for (const [p, w] of [[outM, 1.2], [mid, pier], [outB, 1.2]]) {
+      const t = new THREE.Vector3(p.x, topY, p.z);
+      bar(p.clone().addScaledVector(UP, -0.5), t, w, w, postMat);
       tops.push(t);
     }
+    // Faces the oncoming cars (+z toward them), reading left to right (+x to
+    // the driver's right) along a lintel
+    const faceBasis = (from, to) => {
+      const xs = to.clone().sub(from).setY(0).normalize();
+      if (xs.dot(fm.R) < 0) xs.negate();
+      const zs = new THREE.Vector3().crossVectors(xs, UP).normalize();
+      return [xs, zs];
+    };
     // Lintels over each tunnel mouth, with that lane's sign hung on the front
     const lanes = [
-      [tops[0], tops[1], fm, 0, br.side > 0 ? '⬅ MAIN' : 'MAIN ➜', '#ffffff'],
-      [tops[1], tops[2], fb, 0, `${br.lock ? '🔒 ' : ''}${br.name} ${br.side > 0 ? '➜' : '⬅'}`, br.lock ? '#ffd000' : '#00e5ff'],
+      [tops[0], tops[1], br.side > 0 ? '⬅ MAIN' : 'MAIN ➜', '#ffffff'],
+      [tops[1], tops[2], `${br.lock ? '🔒 ' : ''}${br.name} ${br.side > 0 ? '➜' : '⬅'}`, br.lock ? '#ffd000' : '#00e5ff'],
     ];
-    for (const [p, q, f, , text, color] of lanes) {
+    for (const [p, q, text, color] of lanes) {
       bar(p, q, 1.6, 1.6, postMat);
-      const lo = p.clone().addScaledVector(f.N, -1.3), lo2 = q.clone().addScaledVector(f.N, -1.3);
-      bar(lo, lo2, 0.35, 0.35, trimMat);
-      const sign = new THREE.Mesh(new THREE.BoxGeometry(Math.min(this.hw * 1.3, p.distanceTo(q) - pier / 2 - 2), 2.4, 0.3), new THREE.MeshBasicMaterial({ map: signTexture(text, color) }));
-      sign.position.copy(p).lerp(q, 0.5).addScaledVector(f.N, -0.2).addScaledVector(f.T, -(pier / 2 + 0.4));
-      sign.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(f.R.clone().negate(), f.N, f.T.clone().negate()));
+      bar(p.clone().addScaledVector(UP, -1.3), q.clone().addScaledVector(UP, -1.3), 0.35, 0.35, trimMat);
+      // Centre the sign on the open part of the lintel, clear of the pier
+      const cut = pier / 2 / p.distanceTo(q);
+      const a = p === tops[1] ? p.clone().lerp(q, cut) : p, b2 = q === tops[1] ? q.clone().lerp(p, cut) : q;
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(Math.min(this.hw * 1.3, a.distanceTo(b2) - 2), 2.4, 0.3), new THREE.MeshBasicMaterial({ map: signTexture(text, color) }));
+      const [xs, zs] = faceBasis(a, b2);
+      sign.position.copy(a).lerp(b2, 0.5).addScaledVector(UP, -0.2).addScaledVector(zs, 1.1);
+      sign.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xs, UP, zs));
       scene.add(sign);
     }
-    // Glowing double arrow over the divider
+    // Glowing double arrow on the pier
     const arrow = new THREE.Mesh(new THREE.PlaneGeometry(5, 2.5), new THREE.MeshBasicMaterial({ map: splitArrowTex(), transparent: true, side: THREE.DoubleSide }));
-    arrow.position.copy(tops[1]).addScaledVector(fm.N, -2.2).addScaledVector(fm.T, -(pier / 2 + 0.3));
-    arrow.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(fm.R.clone().negate(), fm.N, fm.T.clone().negate()));
+    const [ax, az] = faceBasis(tops[0], tops[1]);
+    arrow.position.copy(tops[1]).addScaledVector(UP, -2.2).addScaledVector(az, pier / 2 + 0.3);
+    arrow.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(ax, UP, az));
     scene.add(arrow);
   }
 
@@ -884,7 +963,7 @@ function signTexture(text, color) {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.fillStyle = color;
-    g.fillText(text, w / 2, h / 2 + 2);
+    g.fillText(text, w / 2, h / 2 + 2, w - 48);
   });
 }
 
