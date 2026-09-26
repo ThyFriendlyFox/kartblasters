@@ -5,13 +5,11 @@ import { CARS, CAR_IDS, carThumbnail } from './cars.js';
 import { Fx } from './fx.js';
 import { BotBrain, BOT_NAMES } from './bots.js';
 import { Hud } from './hud.js';
+import { WEAPONS, SLOTS, MAX_AMMO_MULT, projectileMesh, botPreference } from './weapons.js';
 
 export const COLORS = ['#ff3b3b', '#ff9f1c', '#ffe03b', '#3bff6f', '#2ec4ff', '#6a5cff', '#ff4fd8', '#f5f5f5'];
 
-const WEAPONS = {
-  blaster: { speed: 115, dmg: 9, life: 1.1, heat: 0.075, cooldown: 0.11 },
-  rocket: { speed: 64, dmg: 45, life: 2.5, cooldown: 0.9, splash: 7.5, splashDmg: 38 },
-};
+const BURN_DPS = 9;
 const HIT_R = 1.9;
 const RESPAWN_MS = 3000;
 const ITEM_RESPAWN_MS = 15000;
@@ -119,9 +117,38 @@ export class Game {
         return g;
       },
     };
+    mk.weapon = (it) => {
+      const w = WEAPONS[it.w];
+      const g = new THREE.Group();
+      const box = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.1, 1.5), new THREE.MeshStandardMaterial({ color: '#2a2f3a', metalness: 0.5, roughness: 0.4 }));
+      box.add(new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: w.color })));
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 10), new THREE.MeshBasicMaterial({ color: w.color }));
+      core.position.y = 0.9;
+      g.add(box, core);
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 56;
+      const x = c.getContext('2d');
+      x.font = 'bold 30px system-ui, sans-serif';
+      x.textAlign = 'center';
+      x.lineWidth = 6;
+      x.strokeStyle = 'rgba(0,0,0,0.8)';
+      const label = `[${w.slot}] ${w.name.toUpperCase()}`;
+      x.strokeText(label, 128, 38);
+      x.fillStyle = w.color;
+      x.fillText(label, 128, 38);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+      sp.scale.set(5, 1.1, 1);
+      sp.position.y = 2.2;
+      g.add(sp);
+      return g;
+    };
     const ringColors = { rocket: '#ff3b3b', health: '#4ade80', boost: '#facc15' };
     for (const it of this.world.items) {
-      const g = mk[it.type]();
+      const g = mk[it.type](it);
+      if (it.type === 'weapon') ringColors.weapon = WEAPONS[it.w].color;
       g.position.set(it.x, 1.6, it.z);
       this.scene.add(g);
       const ring = new THREE.Mesh(
@@ -236,6 +263,11 @@ export class Game {
       this.me.aimYaw -= e.movementX * SENS;
       this.me.aimPitch = Math.max(-0.35, Math.min(0.55, this.me.aimPitch - e.movementY * SENS));
     });
+    c.addEventListener('wheel', (e) => {
+      if (!this.locked) return;
+      e.preventDefault();
+      this.cycleWeapon(e.deltaY > 0 ? 1 : -1);
+    }, { passive: false });
     c.addEventListener('mousedown', (e) => {
       if (!this.locked) return;
       if (e.button === 0) this.mouse.left = true;
@@ -250,6 +282,13 @@ export class Game {
       if (e.target instanceof HTMLInputElement) return;
       if (e.code === 'Tab' || e.code === 'Space') e.preventDefault();
       this.keys.add(e.code);
+      // Top-row number keys pick weapons: 1..9 then 0
+      const dm = /^Digit(\d)$/.exec(e.code);
+      if (dm) {
+        const slot = +dm[1];
+        const w = SLOTS.find((k) => WEAPONS[k].slot === slot);
+        if (w) this.selectWeapon(w);
+      }
       if (e.code === 'KeyM') {
         this.sfx.setMuted(!this.sfx.muted);
         this.hud.toast(this.sfx.muted ? 'Sound off' : 'Sound on');
@@ -362,6 +401,14 @@ export class Game {
         if (m.o !== m.i && !this.isBot(m.o)) return;
         this.spawnProjectile(m);
         break;
+      case 'zap':
+        if (m.o !== m.i && !this.isBot(m.o)) return;
+        this.applyZap(m, false);
+        break;
+      case 'bm':
+        if (m.o !== m.i && !this.isBot(m.o)) return;
+        this.onBeam(m, false);
+        break;
       case 'h':
         this.onRemoteHit(m);
         break;
@@ -432,144 +479,276 @@ export class Game {
     return out.copy(p);
   }
 
+  aimDir(k, origin) {
+    const dir = new THREE.Vector3();
+    if (k === this.me) {
+      dir.subVectors(this.aimPoint(new THREE.Vector3()), origin);
+      if (dir.lengthSq() < 4) this.camera.getWorldDirection(dir);
+    } else {
+      const cp = Math.cos(k.aimPitch);
+      dir.set(Math.sin(k.aimYaw) * cp, Math.sin(k.aimPitch), Math.cos(k.aimYaw) * cp);
+    }
+    return dir.normalize();
+  }
+
+  /** Switch the local player's weapon (keys 1-0 / mouse wheel). */
+  selectWeapon(key) {
+    const me = this.me;
+    if (!WEAPONS[key] || !(key === 'blaster' || me.inv[key] > 0) || me.weapon === key) return;
+    me.weapon = key;
+    this.sfx.play('hitmark', 0.4);
+  }
+
+  cycleWeapon(dir) {
+    const owned = SLOTS.filter((w) => w === 'blaster' || this.me.inv[w] > 0);
+    const i = owned.indexOf(this.me.weapon);
+    this.selectWeapon(owned[(i + dir + owned.length) % owned.length]);
+  }
+
   tryFire(k, weapon, now) {
     const w = WEAPONS[weapon];
-    if (weapon === 'blaster') {
-      if (k.cooldown > 0 || k.overheated) return;
-      k.cooldown = w.cooldown * (k.bot ? 1.5 : 1);
-      k.heat += w.heat;
-      if (k.heat >= 1) {
-        k.heat = 1;
-        k.overheated = true;
-        if (k === this.me) this.sfx.play('overheat');
-      }
-    } else {
+    if (!w) return;
+    if (weapon === 'rocket') {
       if (k.rocketCooldown > 0) return;
       k.rocketCooldown = w.cooldown;
       if (k.rockets <= 0) {
         if (k === this.me) {
           this.sfx.play('empty');
-          this.hud.toast('No rockets — grab a red pickup');
+          this.hud.toast('No rockets: grab a red pickup');
         }
         return;
       }
       k.rockets--;
-    }
-    const origin = k.muzzleWorld(_a);
-    const dir = new THREE.Vector3();
-    if (k === this.me) {
-      dir.subVectors(this.aimPoint(new THREE.Vector3()), origin);
-      if (dir.lengthSq() < 4) this.camera.getWorldDirection(dir);
-      dir.normalize();
     } else {
-      const cp = Math.cos(k.aimPitch);
-      dir.set(Math.sin(k.aimYaw) * cp, Math.sin(k.aimPitch), Math.cos(k.aimYaw) * cp);
+      if (k.cooldown > 0) return;
+      if (weapon === 'blaster') {
+        if (k.overheated) return;
+        k.heat += w.heat;
+        if (k.heat >= 1) {
+          k.heat = 1;
+          k.overheated = true;
+          if (k === this.me) this.sfx.play('overheat');
+        }
+      } else {
+        if (!(k.inv[weapon] > 0)) {
+          k.weapon = 'blaster';
+          return;
+        }
+        k.inv[weapon]--;
+        if (k.inv[weapon] <= 0) {
+          delete k.inv[weapon];
+          if (k === this.me) this.hud.toast(`${w.name} is empty`);
+          k.weapon = 'blaster';
+        }
+      }
+      k.cooldown = w.cooldown * (k.bot ? 1.5 : 1);
     }
-    const m = {
-      t: 'f', p: `${k.id}:${++this.pid}`, o: k.id, w: weapon,
-      x: r2(origin.x), y: r2(origin.y), z: r2(origin.z), d: [r3(dir.x), r3(dir.y), r3(dir.z)],
-    };
+    const origin = k.muzzleWorld(_a).clone();
+    const dir = this.aimDir(k, origin);
+    if (w.hitscan) {
+      this.fireBeam(k, weapon, origin, dir);
+      return;
+    }
+    if (w.lob) dir.y += w.lob;
+    dir.normalize();
+    const m = { t: 'f', p: `${k.id}:${++this.pid}`, o: k.id, w: weapon, x: r2(origin.x), y: r2(origin.y), z: r2(origin.z) };
+    // Spread weapons send every pellet's direction
+    const n = w.pellets || 1;
+    const dirs = [];
+    for (let i = 0; i < n; i++) {
+      const d = dir.clone();
+      if (w.spread) {
+        d.x += (Math.random() - 0.5) * 2 * w.spread;
+        d.y += (Math.random() - 0.5) * 2 * w.spread;
+        d.z += (Math.random() - 0.5) * 2 * w.spread;
+        d.normalize();
+      }
+      dirs.push([r3(d.x), r3(d.y), r3(d.z)]);
+    }
+    m.d = dirs;
+    if (w.homing) {
+      // Lock on to the enemy closest to where we're aiming
+      let best = null, bestScore = 0.55;
+      for (const t of this.karts.values()) {
+        if (t === k || !t.alive) continue;
+        _b.set(t.pos.x - origin.x, t.pos.y + 1 - origin.y, t.pos.z - origin.z);
+        const dist = _b.length();
+        if (dist > 70) continue;
+        const score = _b.divideScalar(dist).dot(dir);
+        if (score > bestScore) { bestScore = score; best = t.id; }
+      }
+      if (best) m.tg = best;
+    }
     this.spawnProjectile(m);
     this.net.send(m);
   }
 
   spawnProjectile(m) {
     const w = WEAPONS[m.w];
-    if (!w || !Array.isArray(m.d)) return;
+    if (!w) return;
+    const dirs = Array.isArray(m.d?.[0]) ? m.d : Array.isArray(m.d) ? [m.d] : null;
+    if (!dirs) return;
     const color = this.players.get(m.o)?.color || '#fff';
-    const pos = new THREE.Vector3(m.x, m.y, m.z);
-    const dir = new THREE.Vector3(m.d[0], m.d[1], m.d[2]).normalize();
-    let mesh;
-    if (m.w === 'blaster') {
-      mesh = new THREE.Group();
-      const core = new THREE.Mesh(this.boltCore ||= new THREE.CylinderGeometry(0.07, 0.07, 2.2, 6).rotateX(Math.PI / 2), this.boltCoreMat ||= new THREE.MeshBasicMaterial({ color: '#ffffff' }));
-      const glow = new THREE.Mesh(
-        this.boltGlow ||= new THREE.CylinderGeometry(0.2, 0.2, 2.6, 8).rotateX(Math.PI / 2),
-        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }),
-      );
-      mesh.add(core, glow);
-    } else {
-      mesh = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.2, 10).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#e0e0e0', metalness: 0.4 }));
-      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 10).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color }));
-      nose.position.z = 0.85;
-      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), new THREE.MeshBasicMaterial({ color: '#ffb703', blending: THREE.AdditiveBlending, transparent: true }));
-      flame.position.z = -0.75;
-      mesh.add(body, nose, flame);
-    }
-    mesh.position.copy(pos);
-    mesh.quaternion.setFromUnitVectors(Z, dir);
-    this.scene.add(mesh);
-    this.projectiles.push({ id: m.p, owner: m.o, w: m.w, pos, dir, speed: w.speed, life: w.life, mesh, color, trail: 0, dead: false });
-    this.fx.muzzle(pos, color);
-    const vol = this.volAt(pos);
-    this.sfx.play(m.w === 'rocket' ? 'rocket' : 'blaster', m.o === this.me.id ? 1 : vol * 0.8);
+    const origin = new THREE.Vector3(+m.x, +m.y, +m.z);
+    dirs.forEach((d, i) => {
+      const dir = new THREE.Vector3(+d[0], +d[1], +d[2]).normalize();
+      const { mesh, ownMat } = projectileMesh(w, m.w, color);
+      mesh.position.copy(origin);
+      mesh.quaternion.setFromUnitVectors(Z, dir);
+      this.scene.add(mesh);
+      this.projectiles.push({
+        id: dirs.length > 1 ? `${m.p}.${i}` : m.p, owner: m.o, w: m.w, def: w,
+        pos: origin.clone(), vel: dir.multiplyScalar(w.speed), life: w.life, max: w.life,
+        mesh, ownMat, color: w.color || color, trail: 0, dead: false, bounces: w.bounces || 0, target: m.tg || null, stuck: null,
+      });
+    });
+    this.fx.muzzle(origin, w.color || color);
+    this.sfx.play(w.sfx, m.o === this.me.id ? 0.9 : this.volAt(origin) * 0.8);
   }
 
   killProjectile(p) {
     if (p.dead) return;
     p.dead = true;
     this.scene.remove(p.mesh);
-    p.mesh.traverse((o) => {
-      if (o.material && o.material !== this.boltCoreMat) o.material.dispose();
-      if (o.geometry && o.geometry !== this.boltCore && o.geometry !== this.boltGlow) o.geometry.dispose();
-    });
+    p.ownMat?.dispose();
+  }
+
+  /** Rough surface normal where a projectile went from `a` (free) into `b` (solid). */
+  surfaceNormal(a, b, out) {
+    const world = this.world;
+    const gy = world.groundAt(b.x, b.z);
+    if (b.y < gy + 0.05) {
+      const e = 0.8;
+      return out.set(world.groundAt(b.x - e, b.z) - world.groundAt(b.x + e, b.z), 2 * e, world.groundAt(b.x, b.z - e) - world.groundAt(b.x, b.z + e)).normalize();
+    }
+    for (const c of world.cyls) {
+      if (c.dead || b.y > c.h) continue;
+      const dx = b.x - c.x, dz = b.z - c.z;
+      if (dx * dx + dz * dz < c.r * c.r) return out.set(dx, 0, dz).normalize();
+    }
+    for (const bx of world.boxes) {
+      if (bx.dead || b.y > bx.h || b.y < bx.y0 || b.x < bx.minX || b.x > bx.maxX || b.z < bx.minZ || b.z > bx.maxZ) continue;
+      if (a.y > bx.h) return out.set(0, 1, 0);
+      if (a.x < bx.minX) return out.set(-1, 0, 0);
+      if (a.x > bx.maxX) return out.set(1, 0, 0);
+      if (a.z < bx.minZ) return out.set(0, 0, -1);
+      return out.set(0, 0, 1);
+    }
+    return out.set(0, 1, 0);
   }
 
   updateProjectiles(dt, now) {
+    const prev = new THREE.Vector3(), n = new THREE.Vector3();
     for (const p of this.projectiles) {
       if (p.dead) continue;
+      const w = p.def;
       p.life -= dt;
-      if (p.life <= 0) {
-        this.killProjectile(p);
-        if (p.w === 'rocket') this.explodeRocket(p, p.pos, null);
+      if (p.stuck) {
+        // Sticky grenade: ride along with whatever it hit, then blow
+        if (p.stuck.kart) {
+          const k = p.stuck.kart;
+          if (k.alive) p.pos.copy(k.pos).add(p.stuck.off);
+        }
+        p.mesh.position.copy(p.pos);
+        p.mesh.scale.setScalar(1 + Math.sin(now * 0.04) * 0.25);
+        if ((p.fuse -= dt) <= 0) {
+          this.killProjectile(p);
+          this.explode(p, p.pos, null);
+        }
         continue;
       }
-      const dist = p.speed * dt;
+      if (p.life <= 0) {
+        this.killProjectile(p);
+        if (w.splash) this.explode(p, p.pos, null);
+        continue;
+      }
+      if (w.gravity) p.vel.y -= w.gravity * dt;
+      if (w.homing && p.target) {
+        const t = this.karts.get(p.target);
+        if (t?.alive) {
+          const spd = p.vel.length();
+          _b.set(t.pos.x - p.pos.x, t.pos.y + 1 - p.pos.y, t.pos.z - p.pos.z).normalize().multiplyScalar(spd);
+          p.vel.lerp(_b, Math.min(1, w.homing * dt)).setLength(spd);
+        }
+      }
+      const dist = p.vel.length() * dt;
       const steps = Math.max(1, Math.ceil(dist / 0.8));
-      const step = dist / steps;
-      for (let s = 0; s < steps && !p.dead; s++) {
-        p.pos.addScaledVector(p.dir, step);
+      const hitR = HIT_R + (w.radius || 0);
+      for (let s = 0; s < steps && !p.dead && !p.stuck; s++) {
+        prev.copy(p.pos);
+        p.pos.addScaledVector(p.vel, dt / steps);
         if (pointBlocked(this.world, p.pos.x, p.pos.y, p.pos.z)) {
-          if (p.w === 'blaster' && this.destructible && this.botAuthority(p.owner)) this.chipBlock(p.pos);
+          if (p.bounces > 0) {
+            this.surfaceNormal(prev, p.pos, n);
+            const vn = p.vel.dot(n);
+            if (vn < 0) p.vel.addScaledVector(n, -2 * vn).multiplyScalar(0.8);
+            p.pos.copy(prev);
+            p.bounces--;
+            this.sfx.play('impact', this.volAt(p.pos) * 0.3);
+            continue;
+          }
+          if (w.sticky) {
+            p.pos.copy(prev);
+            p.stuck = { pos: prev.clone() };
+            p.fuse = w.fuse;
+            break;
+          }
+          if (!w.splash && this.destructible && this.botAuthority(p.owner)) this.chipBlock(p.pos);
           this.killProjectile(p);
           this.fx.impact(p.pos, p.color);
-          if (p.w === 'rocket') this.explodeRocket(p, p.pos, null);
-          else this.sfx.play('impact', this.volAt(p.pos) * 0.5);
+          if (w.splash) this.explode(p, p.pos, null);
+          else if (w.mesh !== 'flame') this.sfx.play('impact', this.volAt(p.pos) * 0.5);
           break;
         }
         for (const k of this.karts.values()) {
           if (!k.alive || k.id === p.owner) continue;
           const dx = p.pos.x - k.pos.x, dy = p.pos.y - k.pos.y - 1, dz = p.pos.z - k.pos.z;
-          if (dx * dx + dy * dy + dz * dz < HIT_R * HIT_R) {
-            this.projectileHitKart(p, k, now);
+          if (dx * dx + dy * dy + dz * dz < hitR * hitR) {
+            if (w.sticky) {
+              p.stuck = { kart: k, off: p.pos.clone().sub(k.pos) };
+              p.fuse = w.fuse;
+            } else {
+              this.projectileHitKart(p, k, now);
+            }
             break;
           }
         }
       }
       if (!p.dead) {
         p.mesh.position.copy(p.pos);
-        if (p.w === 'rocket' && (p.trail -= dt) <= 0) {
+        if (p.vel.lengthSq() > 0.01) p.mesh.quaternion.setFromUnitVectors(Z, _b.copy(p.vel).normalize());
+        if (w.mesh === 'flame') {
+          const age = 1 - p.life / p.max;
+          p.mesh.scale.setScalar(0.5 + age * 3);
+          p.ownMat.opacity = 0.85 * (1 - age);
+        } else if (w.mesh === 'bubble') {
+          p.mesh.scale.setScalar(1 + Math.sin(now * 0.02 + p.life * 9) * 0.08);
+        }
+        if (w.mesh === 'rocket' && (p.trail -= dt) <= 0) {
           p.trail = 0.025;
           this.fx.puff(p.pos, '#cfcfcf', 0.35);
         }
       }
     }
     this.projectiles = this.projectiles.filter((p) => !p.dead);
+    this.updateEffects(dt);
   }
 
   projectileHitKart(p, k, now) {
+    const w = p.def;
     this.killProjectile(p);
     this.fx.impact(p.pos, p.color);
-    const w = WEAPONS[p.w];
     if (k === this.me) {
-      this.damageMe(w.dmg, p.owner, p.w, now, p.dir);
+      this.damageMe(w.dmg, p.owner, p.w, now, p.vel.clone().normalize());
+      if (w.burn) this.ignite(this.me, p.owner, w.burn);
       this.net.send({ t: 'h', p: p.id, w: p.w, o: p.owner, v: this.me.id, x: r2(p.pos.x), y: r2(p.pos.y), z: r2(p.pos.z) });
     } else if (this.isBot(k.id) && this.botAuthority(p.owner)) {
-      this.damageBot(k.id, w.dmg, p.owner, p.w, now);
+      // Bots take any afterburn up front
+      this.damageBot(k.id, w.dmg + (w.burn ? w.burn * BURN_DPS * 0.8 : 0), p.owner, p.w, now);
     }
-    if (p.w === 'rocket') this.explodeRocket(p, p.pos, k.id);
-    else this.sfx.play('impact', this.volAt(p.pos) * 0.6);
+    if (w.chain && this.botAuthority(p.owner)) this.chainZap(p, k);
+    if (w.splash) this.explode(p, p.pos, k.id);
+    else if (w.mesh !== 'flame') this.sfx.play('impact', this.volAt(p.pos) * 0.6);
   }
 
   onRemoteHit(m) {
@@ -579,28 +758,33 @@ export class Game {
       this.killProjectile(p);
       this.fx.impact(pos, p.color);
     }
-    if (m.w === 'rocket') this.explodeRocket({ id: m.p, owner: m.o, w: 'rocket' }, pos, m.v);
+    const w = WEAPONS[m.w];
+    if (w?.splash) this.explode({ id: m.p, owner: m.o, w: m.w, def: w }, pos, m.v);
+    if (w?.chain && this.botAuthority(m.o)) {
+      const k = this.karts.get(m.v);
+      if (k) this.chainZap({ owner: m.o, def: w, pos }, k);
+    }
     if (m.o === this.me.id) {
       this.hud.hit(false);
       this.sfx.play('hitmark');
     }
   }
 
-  explodeRocket(p, pos, directId) {
+  /** Splash damage (rockets, grenades). The owner also decides any crater. */
+  explode(p, pos, directId) {
     if (this.exploded.has(p.id)) return;
     this.exploded.add(p.id);
     if (this.exploded.size > 500) this.exploded = new Set([...this.exploded].slice(-200));
+    const w = p.def || WEAPONS[p.w];
     const now = performance.now();
-    const color = this.players.get(p.owner)?.color || '#ff8c1a';
-    this.fx.explosion(pos.clone(), color, 1);
-    // The rocket's owner decides the crater so every client digs the same hole
-    if (this.destructible && this.botAuthority(p.owner)) {
-      const m = { t: 'dig', x: r2(pos.x), y: r2(pos.y), z: r2(pos.z), r: 5 };
+    const color = w.color && p.w !== 'rocket' ? w.color : this.players.get(p.owner)?.color || '#ff8c1a';
+    this.fx.explosion(pos.clone(), color, w.splash > 7 ? 1 : 0.8);
+    if (this.destructible && w.dig && this.botAuthority(p.owner)) {
+      const m = { t: 'dig', x: r2(pos.x), y: r2(pos.y), z: r2(pos.z), r: w.dig };
       this.net.send(m);
       this.applyDig(m, true);
     }
     this.sfx.play('explode', this.volAt(pos));
-    const w = WEAPONS.rocket;
     const me = this.me;
     const dMe = Math.hypot(me.pos.x - pos.x, me.pos.y + 1 - pos.y, me.pos.z - pos.z);
     this.shake = Math.max(this.shake, Math.max(0, 1 - dMe / 30) * 0.8);
@@ -609,15 +793,143 @@ export class Game {
       _a.set(me.pos.x - pos.x, 0, me.pos.z - pos.z).normalize();
       me.vel.addScaledVector(_a, 18 * f);
       me.vel.y += 8 * f;
-      this.damageMe(w.splashDmg * f, p.owner, 'rocket', now, null);
+      this.damageMe(w.splashDmg * f, p.owner, p.w, now, null);
     }
     if (this.botAuthority(p.owner)) {
       for (const k of this.karts.values()) {
         if (!k.alive || !this.isBot(k.id) || k.id === directId || k.id === p.owner) continue;
         const d = Math.hypot(k.pos.x - pos.x, k.pos.y + 1 - pos.y, k.pos.z - pos.z);
-        if (d < w.splash) this.damageBot(k.id, w.splashDmg * (1 - d / w.splash), p.owner, 'rocket', now);
+        if (d < w.splash) this.damageBot(k.id, w.splashDmg * (1 - d / w.splash), p.owner, p.w, now);
       }
     }
+  }
+
+  /** Electro Bolt: arc from the victim to up to N more enemies nearby (through walls). */
+  chainZap(p, victim) {
+    const w = p.def;
+    const from = victim.pos;
+    const targets = [...this.karts.values()]
+      .filter((t) => t.alive && t !== victim && t.id !== p.owner)
+      .map((t) => [t, t.pos.distanceTo(from)])
+      .filter(([, d]) => d < w.chainRange)
+      .sort((a, b) => a[1] - b[1])
+      .slice(0, w.chain)
+      .map(([t]) => t.id);
+    if (!targets.length) return;
+    const m = { t: 'zap', o: p.owner, x: r2(from.x), y: r2(from.y + 1), z: r2(from.z), v: targets, d: w.chainDmg };
+    this.net.send(m);
+    this.applyZap(m, true);
+  }
+
+  applyZap(m, mine) {
+    const from = new THREE.Vector3(+m.x, +m.y, +m.z);
+    for (const id of m.v || []) {
+      const t = this.karts.get(id);
+      if (!t) continue;
+      this.lightning(from, new THREE.Vector3(t.pos.x, t.pos.y + 1, t.pos.z), WEAPONS.electro.color);
+      const d = Math.min(30, +m.d || 0);
+      if (id === this.me.id && m.o !== this.me.id) this.damageMe(d, m.o, 'electro', performance.now(), null);
+      // Bot damage is sent by whoever launched the zap
+      else if (mine && this.isBot(id)) this.damageBot(id, d, m.o, 'electro', performance.now());
+    }
+    this.sfx.play('zap', this.volAt(from));
+  }
+
+  /** Focus Beam: instant, perfectly accurate ray. The shooter reports the damage. */
+  fireBeam(k, weapon, origin, dir) {
+    const w = WEAPONS[weapon];
+    const p = origin.clone();
+    let victim = null;
+    for (let d = 0; d < w.range; d += 0.6) {
+      p.addScaledVector(dir, 0.6);
+      if (pointBlocked(this.world, p.x, p.y, p.z)) break;
+      for (const t of this.karts.values()) {
+        if (t === k || !t.alive) continue;
+        const dx = p.x - t.pos.x, dy = p.y - t.pos.y - 1, dz = p.z - t.pos.z;
+        if (dx * dx + dy * dy + dz * dz < HIT_R * HIT_R) { victim = t; break; }
+      }
+      if (victim) break;
+    }
+    const m = { t: 'bm', o: k.id, a: [r2(origin.x), r2(origin.y), r2(origin.z)], b: [r2(p.x), r2(p.y), r2(p.z)] };
+    if (victim) {
+      m.v = victim.id;
+      m.d = w.dmg;
+      if (this.isBot(victim.id)) this.damageBot(victim.id, w.dmg, k.id, weapon, performance.now());
+      else if (victim === this.me) this.damageMe(w.dmg, k.id, weapon, performance.now(), null, true);
+    }
+    this.net.send(m);
+    this.onBeam(m, true);
+  }
+
+  onBeam(m, local) {
+    const a = new THREE.Vector3(...m.a.map(Number)), b = new THREE.Vector3(...m.b.map(Number));
+    if (![a.x, a.y, a.z, b.x, b.y, b.z].every(Number.isFinite)) return;
+    this.beamFx(m.o, a, b);
+    if (!local && m.v === this.me.id && m.o !== this.me.id) this.damageMe(Math.min(10, +m.d || 0), m.o, 'beam', performance.now(), null, true);
+    if (m.v && m.o === this.me.id && Math.random() < 0.3) this.hud.hit(false);
+  }
+
+  beamFx(owner, a, b) {
+    this.beams ||= new Map();
+    let bm = this.beams.get(owner);
+    if (!bm) {
+      const mesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.12, 1, 6, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5),
+        new THREE.MeshBasicMaterial({ color: WEAPONS.beam.color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      const outer = new THREE.Mesh(mesh.geometry, new THREE.MeshBasicMaterial({ color: WEAPONS.beam.color, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }));
+      outer.scale.set(3, 3, 1);
+      mesh.add(outer);
+      this.scene.add(mesh);
+      bm = { mesh, life: 0 };
+      this.beams.set(owner, bm);
+    }
+    const len = a.distanceTo(b);
+    bm.mesh.position.copy(a);
+    bm.mesh.quaternion.setFromUnitVectors(Z, _b.subVectors(b, a).normalize());
+    bm.mesh.scale.set(1, 1, len);
+    bm.mesh.visible = true;
+    bm.life = 0.14;
+    this.fx.spark(b, WEAPONS.beam.color);
+  }
+
+  lightning(a, b, color) {
+    const pts = [];
+    const segs = 8;
+    for (let i = 0; i <= segs; i++) {
+      const p = a.clone().lerp(b, i / segs);
+      if (i > 0 && i < segs) p.add(new THREE.Vector3((Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 1.6));
+      pts.push(p);
+    }
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color, transparent: true }));
+    this.scene.add(line);
+    (this.bolts ||= []).push({ line, life: 0.3 });
+    this.fx.impact(b, color);
+  }
+
+  updateEffects(dt) {
+    for (const bm of this.beams?.values() || []) {
+      bm.life -= dt;
+      if (bm.life <= 0) bm.mesh.visible = false;
+    }
+    if (this.bolts) {
+      for (const b of this.bolts) {
+        b.life -= dt;
+        b.line.material.opacity = Math.max(0, b.life / 0.3);
+        if (b.life <= 0) {
+          this.scene.remove(b.line);
+          b.line.geometry.dispose();
+          b.line.material.dispose();
+        }
+      }
+      this.bolts = this.bolts.filter((b) => b.life > 0);
+    }
+  }
+
+  /** Flamethrower afterburn on the local player (bots take it up front). */
+  ignite(k, by, secs) {
+    k.burnT = Math.max(k.burnT || 0, secs);
+    k.burnBy = by;
   }
 
   // ---------- change car (pause menu) ----------
@@ -658,6 +970,14 @@ export class Game {
     document.getElementById('carSwapNote').textContent = this.pendingCar
       ? `Driving ${CARS[this.me.carType].name} · switching to ${CARS[this.pendingCar].name} on your next respawn`
       : `Driving ${CARS[this.me.carType].name} · pick another car to swap to it when you respawn`;
+  }
+
+  /** Bots pick the best weapon they own for the range they're fighting at. */
+  botWeapon(kart, brain) {
+    const t = brain.target;
+    if (!t) return;
+    const pref = botPreference(kart.pos.distanceTo(t.pos));
+    kart.weapon = pref.find((w) => kart.inv[w] > 0) || 'blaster';
   }
 
   // ---------- destructible terrain ----------
@@ -703,13 +1023,15 @@ export class Game {
     this.sfx.play('bump', this.volAt(new THREE.Vector3(pieces[0].cx, pieces[0].cy, pieces[0].cz)));
   }
 
-  damageMe(dmg, by, weapon, now, dir) {
+  damageMe(dmg, by, weapon, now, dir, quiet = false) {
     const me = this.me;
     if (!me.alive || now < me.shieldUntil) return;
     me.hp -= dmg;
-    this.hud.damage(dmg);
-    this.shake = Math.max(this.shake, 0.25 + dmg / 80);
-    this.sfx.play('hurt', 0.7);
+    if (!quiet || Math.random() < 0.15) {
+      this.hud.damage(dmg);
+      this.shake = Math.max(this.shake, 0.25 + dmg / 80);
+      this.sfx.play('hurt', quiet ? 0.3 : 0.7);
+    }
     if (dir) me.vel.addScaledVector(dir, dmg * 0.15);
     if (me.hp <= 0) {
       me.hp = 0;
@@ -738,7 +1060,7 @@ export class Game {
       k.hp = 0;
       k.alive = false;
       k.respawnAt = now + RESPAWN_MS;
-      const m = { t: 'k', v: id, by, w: weapon === 'rocket' ? 'rocket' : 'blaster' };
+      const m = { t: 'k', v: id, by, w: WEAPONS[weapon] ? weapon : 'blaster' };
       this.net.send(m);
       this.onKill(m);
     }
@@ -782,6 +1104,7 @@ export class Game {
         const dx = k.pos.x - it.x, dz = k.pos.z - it.z;
         if (dx * dx + dz * dz > 2.8 * 2.8 || k.pos.y - this.world.groundAt(it.x, it.z) > 4) continue;
         if (it.type === 'health' && k.hp >= k.maxHp) continue;
+        if (it.type === 'weapon' && (k.inv[it.w] || 0) >= WEAPONS[it.w].ammo * MAX_AMMO_MULT) continue;
         if (this.net.isHost) this.hostGrab(it.id, k.id);
         else {
           it.pending = now;
@@ -824,9 +1147,14 @@ export class Game {
     if (it.type === 'rocket') k.rockets = Math.min(9, k.rockets + 3);
     if (it.type === 'health') k.hp = Math.min(k.maxHp, k.hp + 50);
     if (it.type === 'boost') k.boost = 1;
+    if (it.type === 'weapon') {
+      const w = WEAPONS[it.w];
+      k.inv[it.w] = Math.min(w.ammo * MAX_AMMO_MULT, (k.inv[it.w] || 0) + w.ammo);
+      if (k.weapon === 'blaster') k.weapon = it.w;
+    }
     if (k === this.me) {
       this.sfx.play('pickup');
-      this.hud.toast({ rocket: '+3 Rockets', health: '+50 Health', boost: 'Boost refilled' }[it.type]);
+      this.hud.toast(it.type === 'weapon' ? `${WEAPONS[it.w].icon} ${WEAPONS[it.w].name} [${WEAPONS[it.w].slot}]` : { rocket: '+3 Rockets', health: '+50 Health', boost: 'Boost refilled' }[it.type]);
     }
   }
 
@@ -856,7 +1184,12 @@ export class Game {
       const input = this.readInput();
       const ev = me.simulate(dt, input, this.world, all);
       this.kartEvents(me, ev);
-      if (this.locked && this.mouse.left) this.tryFire(me, 'blaster', now);
+      if (me.burnT > 0) {
+        me.burnT -= dt;
+        if (Math.random() < 0.5) this.fx.spawn({ color: Math.random() < 0.5 ? '#ff7b1c' : '#ffd166', pos: _a.set(me.pos.x + (Math.random() - 0.5) * 2, me.pos.y + 1, me.pos.z + (Math.random() - 0.5) * 2), vel: _b.set(0, 4, 0), life: 0.4, size: 0.5, grow: 2, additive: true });
+        this.damageMe(BURN_DPS * dt, me.burnBy, 'flame', now, null, true);
+      }
+      if (this.locked && this.mouse.left) this.tryFire(me, me.weapon, now);
       if (this.locked && (this.mouse.right || this.keys.has('KeyE') || this.keys.has('KeyQ'))) this.tryFire(me, 'rocket', now);
       if (me.drifting && Math.random() < 0.6) {
         const f = me.forward(_b);
@@ -878,9 +1211,10 @@ export class Game {
         continue;
       }
       const input = brain.think(dt, kart, all, this.items, now);
+      this.botWeapon(kart, brain);
       const ev = kart.simulate(dt, input, this.world, all);
       this.kartEvents(kart, ev);
-      if (input.fire) this.tryFire(kart, 'blaster', now);
+      if (input.fire) this.tryFire(kart, kart.weapon, now);
       if (input.rocket) this.tryFire(kart, 'rocket', now);
     }
 
@@ -909,6 +1243,7 @@ export class Game {
     const speed = me.vel.x * f.x + me.vel.z * f.z;
     this.sfx.engine(speed, me.boosting, me.alive && this.locked);
     this.hud.stats(me, speed);
+    this.hud.weaponBar(me);
     this.hud.tick(now);
     this.hud.room(this.net.offline ? null : this.code, [...this.players.values()].filter((p) => !p.bot).length);
     this.hud.board(this.players, me.id);

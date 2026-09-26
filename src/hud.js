@@ -1,3 +1,5 @@
+import { WEAPONS, SLOTS } from './weapons.js';
+
 const $ = (id) => document.getElementById(id);
 
 function esc(s) {
@@ -77,7 +79,7 @@ export class Hud {
   }
 
   killFeed(killer, victim, weapon) {
-    const icon = weapon === 'rocket' ? '🚀' : '⚡';
+    const icon = WEAPONS[weapon]?.icon || '⚡';
     if (!killer || killer === victim) {
       this.feed(`<span style="color:${esc(victim.color)}">${esc(victim.name)}</span> 💥 wrecked`);
       return;
@@ -145,6 +147,35 @@ export class Hud {
       `<tr class="${id === myId ? 'me' : ''}"><td><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}${p.bot ? ' <small>BOT</small>' : ''}</td><td>${p.kills}</td><td>${p.deaths}</td></tr>`,
     );
     this.set('sb', this.el.scoreboard, 'html', `<table><tr><th>Driver</th><th>Kills</th><th>Deaths</th></tr>${rows.join('')}</table>`);
+  }
+
+  /** Row of weapon slots 1..0: owned ones light up, current one highlighted, with ammo. */
+  weaponBar(k) {
+    const el = $('weaponBar');
+    const key = `${k.weapon}|${SLOTS.map((w) => k.inv[w] || 0).join(',')}`;
+    if (this.last.wbar === key) return;
+    this.last.wbar = key;
+    if (!el.children.length) {
+      for (const w of SLOTS) {
+        const d = document.createElement('div');
+        d.className = 'wslot';
+        d.innerHTML = `<b>${WEAPONS[w].slot}</b><span>${WEAPONS[w].icon}</span><small></small>`;
+        d.title = WEAPONS[w].name;
+        el.appendChild(d);
+      }
+      this.wName = document.createElement('div');
+      this.wName.className = 'wname';
+      el.appendChild(this.wName);
+    }
+    SLOTS.forEach((w, i) => {
+      const d = el.children[i];
+      const owned = w === 'blaster' || k.inv[w] > 0;
+      d.classList.toggle('owned', owned);
+      d.classList.toggle('on', k.weapon === w);
+      d.style.setProperty('--wc', WEAPONS[w].color || '#ffffff');
+      d.querySelector('small').textContent = w === 'blaster' ? '∞' : owned ? k.inv[w] : '';
+    });
+    this.wName.textContent = WEAPONS[k.weapon]?.name || '';
   }
 
   minimap(world, karts, items, me) {

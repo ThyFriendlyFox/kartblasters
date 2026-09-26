@@ -450,3 +450,34 @@ label.check small { width: 100%; color: var(--muted); font-weight: 500; padding-
 .swapGrid .carBtn img { max-width: 72px; }
 .swapGrid .carBtn.current:not(.on) { border-color: rgba(255, 255, 255, 0.25); }
 #raceHud .keys { font-family: Inter, system-ui, sans-serif; font-weight: 800; font-size: 14px; color: #ffd000; margin-top: 4px; }
+
+/* ---------- battle weapon bar ---------- */
+#weaponBar {
+  position: absolute;
+  left: 50%; bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+}
+body.mode-race #weaponBar { display: none; }
+.wslot {
+  width: 44px; height: 52px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 2px solid transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  opacity: 0.35;
+  position: relative;
+  font-size: 18px;
+}
+.wslot b { position: absolute; top: 2px; left: 5px; font-size: 10px; color: var(--muted); }
+.wslot small { font-size: 10px; font-weight: 800; color: var(--text); min-height: 12px; }
+.wslot.owned { opacity: 0.95; }
+.wslot.on { border-color: var(--wc); background: rgba(0, 0, 0, 0.7); transform: translateY(-4px); box-shadow: 0 0 12px var(--wc); }
+.wname {
+  position: absolute; bottom: 62px; left: 50%; transform: translateX(-50%);
+  font-family: 'Russo One', sans-serif; font-size: 15px; white-space: nowrap;
+  text-shadow: 0 2px 6px #000;
+}
+@media (max-width: 800px) { .wslot { width: 30px; height: 40px; font-size: 13px; } #stats { bottom: 70px; } }

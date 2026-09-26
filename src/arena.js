@@ -332,6 +332,13 @@ export function buildArena(scene, { map = 'stadium', destructible = false } = {}
   for (const [x, z] of [[47, 47], [-47, 47], [47, -47], [-47, -47]]) world.items.push({ id: id++, type: 'rocket', x, z });
   for (const [x, z] of [[74, 0], [-74, 0], [0, 74], [0, -74]]) world.items.push({ id: id++, type: 'health', x, z });
   for (const [x, z] of [[18, 18], [-18, -18], [18, -18], [-18, 18]]) world.items.push({ id: id++, type: 'boost', x, z });
+  // Weapon crates (keys 2-0)
+  for (const [w, x, z] of [
+    ['hail', 30, 30], ['bubble', -30, -30], ['grenade', 30, -30], ['electro', -30, 30], ['sniper', 0, 82],
+    ['beam', 0, -82], ['minigun', 82, -30], ['shotgun', -82, 30], ['flame', 0, 12],
+  ]) {
+    world.items.push({ id: id++, type: 'weapon', w, x, z });
+  }
 
   // Instanced blocks
   const unit = new THREE.BoxGeometry(1, 1, 1);

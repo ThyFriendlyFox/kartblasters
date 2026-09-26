@@ -125,6 +125,15 @@ export class Sfx {
       case 'beep': this.tone('square', 440, 440, 0.25, 0.25 * vol); break;
       case 'go': this.tone('square', 880, 880, 0.6, 0.3 * vol); break;
       case 'lap': this.tone('triangle', 660, 990, 0.2, 0.3 * vol); setTimeout(() => this.ctx && this.tone('triangle', 990, 1320, 0.25, 0.3 * vol), 140); break;
+      case 'shotgun': this.noiseBurst(0.35, 0.55 * vol, 2600); this.tone('square', 160, 60, 0.15, 0.2 * vol); break;
+      case 'laser': this.tone('square', 2200, 900, 0.05, 0.06 * vol); break;
+      case 'hail': this.tone('triangle', 900, 300, 0.12, 0.15 * vol); break;
+      case 'bubble': this.tone('sine', 300, 1100, 0.15, 0.2 * vol); break;
+      case 'grenade': this.tone('sine', 220, 90, 0.2, 0.35 * vol); this.noiseBurst(0.1, 0.2 * vol, 800); break;
+      case 'flame': this.noiseBurst(0.12, 0.12 * vol, 1400); break;
+      case 'zap': this.tone('sawtooth', 1600, 120, 0.2, 0.18 * vol); this.noiseBurst(0.15, 0.2 * vol, 6000, 3); break;
+      case 'beam': this.tone('sine', 1200, 1250, 0.1, 0.05 * vol); break;
+      case 'sniper': this.noiseBurst(0.6, 0.8 * vol, 5000); this.tone('square', 1800, 90, 0.35, 0.3 * vol); break;
       case 'empty': this.tone('square', 200, 150, 0.05, 0.1 * vol); break;
     }
   }

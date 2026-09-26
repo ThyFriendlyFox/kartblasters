@@ -30,6 +30,25 @@ Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no ga
 | Stadium | Battle | Walled arena with cover, jump pads, rocket/health/boost pickups |
 | Crater Field | Battle | Rolling hills with brick forts and stone pillars |
 
+### Weapons (battle)
+
+Inspired by the Raze flash games. Everyone starts with the Blaster; the rest come from weapon crates around both battle maps (each crate is labeled with its key). Picking up a weapon you already have tops up its ammo. You go back to the Blaster when you die.
+
+| Key | Weapon | What it does |
+| --- | --- | --- |
+| 1 | Blaster | Unlimited, but overheats if you hold the trigger |
+| 2 | Blunderbuss | 8-pellet shotgun blast, short range |
+| 3 | Laser Minigun | Very fast, spread-out lasers |
+| 4 | Hail Storm | Arcing ice balls that bounce up to 3 times (shoot around corners) |
+| 5 | Bubble Blaster | Slow bubbles that home in on the enemy you aim at |
+| 6 | Grenade Launcher | Sticky plasma grenades that explode 1 s after landing (they dig craters) |
+| 7 | Flamethrower | Short-range fire that sets targets burning |
+| 8 | Electro Bolt | On hit, arcs to up to 3 more enemies nearby, even through walls |
+| 9 | Focus Beam | Continuous beam that never misses, low damage per tick |
+| 0 | Holy Grail | Sniper: a near-instant 85-damage shot, slow reload |
+
+Rockets stay on right click / E / Q, with ammo from the red pickups. AI cars grab weapon crates too and pick the best weapon for the range they're fighting at.
+
 ### Destructible terrain (battle)
 
 Tick **💣 Destructible terrain** when hosting a battle (on by default). Then:
@@ -73,7 +92,8 @@ Take the jumps fast: if you come up short, you wipe out and respawn past the lan
 | --- | --- |
 | W A S D / arrows | Drive |
 | Mouse | Aim turret (click the game to lock the mouse) |
-| Left click | Blaster (can overheat) |
+| Left click | Fire the current weapon |
+| 1 … 9, 0 (top row) / mouse wheel | Switch weapon |
 | Right click / E / Q | Rocket (grab red pickups for ammo) |
 | Shift | Boost |
 | Space | Drift / handbrake |

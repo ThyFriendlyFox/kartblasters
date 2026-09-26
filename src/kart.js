@@ -60,6 +60,9 @@ export class Kart {
     this.heat = 0;
     this.overheated = false;
     this.rockets = 2;
+    this.inv = {};
+    this.weapon = 'blaster';
+    this.burnT = 0;
     this.shieldUntil = 0;
     this.onGround = true;
     this.padCooldown = 0;
@@ -188,6 +191,10 @@ export class Kart {
     this.heat = 0;
     this.overheated = false;
     this.rockets = 2;
+    this.inv = {}; // weapon -> ammo (the blaster is always available)
+    this.weapon = 'blaster';
+    this.burnT = 0;
+    this.cooldown = 0;
     this.shieldUntil = now + 2000;
     this.root.visible = true;
   }

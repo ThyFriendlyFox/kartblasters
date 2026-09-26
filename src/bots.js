@@ -62,8 +62,11 @@ export class BotBrain {
     const lowHp = bot.hp < 35;
     const healthItem = lowHp ? nearestItem(items, 'health', bot.pos) : null;
     const rocketItem = bot.rockets === 0 ? nearestItem(items, 'rocket', bot.pos) : null;
+    const weaponItem = !Object.keys(bot.inv || {}).length ? nearestItem(items, 'weapon', bot.pos) : null;
     if (healthItem) {
       gx = healthItem.x; gz = healthItem.z;
+    } else if (weaponItem && weaponItem.dist < 45) {
+      gx = weaponItem.x; gz = weaponItem.z;
     } else if (t) {
       const dx = t.pos.x - bot.pos.x, dz = t.pos.z - bot.pos.z;
       const d = Math.hypot(dx, dz);
