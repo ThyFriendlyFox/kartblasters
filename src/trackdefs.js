@@ -28,8 +28,8 @@ export class TrackTurtle {
     return new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
   }
 
-  emit(p, { gap = false, boost = false } = {}) {
-    this.pts.push({ p: p.clone(), roll: this.roll, gap, boost, color: this.col });
+  emit(p, { gap = false, boost = false, kick = false } = {}) {
+    this.pts.push({ p: p.clone(), roll: this.roll, gap, boost, kick, color: this.col });
   }
 
   paint(color) {
@@ -46,6 +46,19 @@ export class TrackTurtle {
       this.pos.copy(p0).addScaledVector(d, len * t);
       this.pos.y = p0.y + dy * e;
       this.emit(this.pos, flags);
+    }
+    return this;
+  }
+
+  /** Kicker ramp: gets steeper toward the lip so cars launch into the air. */
+  ramp(len, rise) {
+    const p0 = this.pos.clone(), d = this.dir();
+    const n = Math.max(2, Math.ceil(len / STEP));
+    for (let i = 1; i <= n; i++) {
+      const t = i / n;
+      this.pos.copy(p0).addScaledVector(d, len * t);
+      this.pos.y = p0.y + rise * t * t;
+      this.emit(this.pos, { kick: true });
     }
     return this;
   }
@@ -126,15 +139,45 @@ export class TrackTurtle {
     return this;
   }
 
-  /** Smooth Hermite curve back to the start point and heading. */
+  /** Name the current point (forks, joins and key pickups refer to marks). */
+  mark(name) {
+    this.marks[name] = { pos: this.pos.clone(), yaw: this.yaw, idx: this.pts.length - 1 };
+    return this;
+  }
+
+  /**
+   * Finish the loop. Any small mismatch between where the path ended and
+   * where it should end (straight behind the start line) is spread evenly
+   * over the whole lap, so the road runs into the start line perfectly
+   * straight instead of kinking there.
+   */
   close() {
+    const p0 = this.start.pos;
+    const d0 = new THREE.Vector3(Math.sin(this.start.yaw), 0, Math.cos(this.start.yaw));
+    const back = Math.max(35, -this.pos.clone().sub(p0).dot(d0));
+    const want = p0.clone().addScaledVector(d0, -back);
+    const err = this.pos.clone().sub(want);
+    const cum = [0];
+    for (let i = 1; i < this.pts.length; i++) cum.push(cum[i - 1] + this.pts[i].p.distanceTo(this.pts[i - 1].p));
+    const total = cum[cum.length - 1] || 1;
+    for (let i = 1; i < this.pts.length; i++) this.pts[i].p.addScaledVector(err, -cum[i] / total);
+    for (const m of Object.values(this.marks)) if (m.idx != null) m.pos = this.pts[m.idx].p.clone();
+    this.pos.copy(want);
+    // Straight run-in to the start line
+    const n = Math.ceil(back / STEP);
+    for (let i = 1; i < n; i++) this.emit(want.clone().addScaledVector(d0, (back * i) / n), {});
+    return this;
+  }
+
+  /** Smooth Hermite curve to a point and heading (includes the end point unless closing a loop). */
+  closeTo(p0, yaw0, includeEnd = true) {
     const pE = this.pos.clone(), dE = this.dir();
-    const p0 = this.start.pos, d0 = new THREE.Vector3(Math.sin(this.start.yaw), 0, Math.cos(this.start.yaw));
+    const d0 = new THREE.Vector3(Math.sin(yaw0), 0, Math.cos(yaw0));
     const dist = pE.distanceTo(p0);
     const n = Math.max(2, Math.ceil((dist * 1.2) / STEP));
     const m0 = dE.clone().multiplyScalar(dist), m1 = d0.clone().multiplyScalar(dist);
     const p = new THREE.Vector3();
-    for (let i = 1; i < n; i++) {
+    for (let i = 1; i < (includeEnd ? n + 1 : n); i++) {
       const t = i / n, t2 = t * t, t3 = t2 * t;
       p.set(0, 0, 0)
         .addScaledVector(pE, 2 * t3 - 3 * t2 + 1)
@@ -143,9 +186,14 @@ export class TrackTurtle {
         .addScaledVector(m1, t3 - t2);
       this.emit(p, {});
     }
+    this.pos.copy(p0);
+    this.yaw = yaw0;
     return this;
   }
 }
+
+// Leg lengths chosen so each circuit closes back on its start line
+const LEG = { twin2: 60, twin3: 60, twin4: 174, junc2: 60, junc3: 110, junc4: 156 };
 
 export const TRACKS = {
   orange: {
@@ -242,6 +290,89 @@ export const TRACKS = {
       t.turn(-90, 42);
       return t.close();
     },
+  },
+  twin: {
+    name: 'Twin Peaks',
+    desc: 'Two routes and a key-locked shortcut: pick your path',
+    theme: 'toy',
+    width: 15,
+    build() {
+      const t = new TrackTurtle(0, 4, 0, 0, this.width).paint('#ff7a00');
+      t.straight(40).boost(12).straight(20).mark('f1');
+      // Low road: flat and fast
+      t.straight(40).boost(12).straight(60).boost(12).straight(26).mark('j1');
+      t.straight(20);
+      t.turn(-90, 45);
+      t.straight(20).mark('k1').straight(30);
+      // Trick kicker
+      t.paint('#ffd000').ramp(14, 1.6).gap(40, -2).straight(34, -3).paint('#ff7a00');
+      t.straight(LEG.twin2);
+      t.turn(-90, 45);
+      t.straight(20).mark('f2');
+      // Long way round: a wide S-bend (the shortcut cuts straight through)
+      t.straight(30).turn(80, 40).turn(-160, 40).turn(80, 40).straight(30).mark('j2');
+      t.straight(LEG.twin3);
+      t.turn(-90, 45);
+      t.boost(12).straight(LEG.twin4);
+      t.turn(-90, 45);
+      return t.close();
+    },
+    branches: [
+      {
+        from: 'f1', to: 'j1', side: 1, name: 'HIGH ROAD', color: '#39d353',
+        build(b) {
+          b.turn(-28, 60).straight(24, 8).paint('#ffd000').ramp(14, 1.6).gap(36, -4).paint('#39d353').straight(24, -7).turn(22, 70);
+        },
+      },
+      {
+        from: 'f2', to: 'j2', side: 1, name: 'SHORTCUT', color: '#b400ff', lock: 'k1',
+        build(b) {
+          b.turn(-30, 45).straight(10).corkscrew(60, 1).turn(30, 45).boost(12);
+        },
+      },
+    ],
+    keys: [{ id: 'k1', at: 'k1', d: 4.5 }],
+  },
+  junction: {
+    name: 'Neon Junction',
+    desc: 'Split-level sky highway with a locked express lane',
+    theme: 'neon',
+    width: 16,
+    build() {
+      const t = new TrackTurtle(0, 26, 0, 0, this.width).paint('#1f4bff');
+      t.straight(40).boost(12).straight(20).mark('f1');
+      // Upper deck: rolling waves
+      t.straight(40).paint('#ff2bd6').straight(30, 6).straight(30, -6).straight(30, 6).straight(30, -6).paint('#1f4bff').straight(40).mark('j1');
+      t.straight(20);
+      t.turn(-90, 50);
+      t.straight(30);
+      t.paint('#ffe600').ramp(14, 1.6).gap(40, -2).straight(16, -3).paint('#1f4bff').mark('k1').straight(30);
+      t.straight(LEG.junc2);
+      t.turn(-90, 50);
+      t.straight(20).mark('f2');
+      // Long way round: zig-zag with a loop
+      t.straight(20).turn(70, 38).paint('#00d2ff').loop(26, 1).paint('#1f4bff').turn(-140, 38).turn(70, 38).straight(20).mark('j2');
+      t.straight(LEG.junc3);
+      t.turn(-90, 50);
+      t.boost(12).straight(LEG.junc4);
+      t.turn(-90, 50);
+      return t.close();
+    },
+    branches: [
+      {
+        from: 'f1', to: 'j1', side: -1, name: 'LOWER DECK', color: '#00d2ff',
+        build(b) {
+          b.turn(20, 70).straight(30, -12).boost(12).straight(40).boost(12).straight(30, 12).turn(-20, 70);
+        },
+      },
+      {
+        from: 'f2', to: 'j2', side: 1, name: 'EXPRESS', color: '#ffe600', lock: 'k1',
+        build(b) {
+          b.turn(-30, 50).straight(35, 14).turn(30, 50).boost(12).straight(30).boost(12).straight(35, -14);
+        },
+      },
+    ],
+    keys: [{ id: 'k1', at: 'k1', d: -5 }],
   },
 };
 export const TRACK_IDS = Object.keys(TRACKS);

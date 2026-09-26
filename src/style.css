@@ -449,3 +449,4 @@ label.check small { width: 100%; color: var(--muted); font-weight: 500; padding-
 @media (max-width: 480px) { .swapGrid { grid-template-columns: repeat(3, 1fr); } }
 .swapGrid .carBtn img { max-width: 72px; }
 .swapGrid .carBtn.current:not(.on) { border-color: rgba(255, 255, 255, 0.25); }
+#raceHud .keys { font-family: Inter, system-ui, sans-serif; font-weight: 800; font-size: 14px; color: #ffd000; margin-top: 4px; }

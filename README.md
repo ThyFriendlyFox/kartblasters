@@ -25,6 +25,8 @@ Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no ga
 | Neon Highway | Race | Floating sky city at night: corkscrew, loop, wave section, two jumps |
 | Mega Loop Canyon | Race | Desert stunt run: giant loop, double loop, big jump |
 | Volcano Spiral | Race | Double helix climbing round a volcano, steep drop into a mega loop |
+| Twin Peaks | Race | Two routes (low road or the High Road jump) plus a key-locked corkscrew shortcut |
+| Neon Junction | Race | Split-level sky highway (upper waves or Lower Deck) plus a key-locked Express lane |
 | Stadium | Battle | Walled arena with cover, jump pads, rocket/health/boost pickups |
 | Crater Field | Battle | Rolling hills with brick forts and stone pillars |
 
@@ -52,10 +54,18 @@ Everyone sees the same holes. Craters are carved so the result doesn't depend on
 | A / D | Steer |
 | Space | Drift (take corners faster, charges nitro) |
 | Shift | Nitro |
+| A / D in the air | Spin trick |
+| Space in the air | Flip trick |
 | R | Recenter on the track |
 | Esc | Pause / leave |
 
-Take the jumps fast: if you come up short, you wipe out and respawn before the ramp.
+Take the jumps fast: if you come up short, you wipe out and respawn past the landing.
+
+**Routes and keys:** on Twin Peaks and Neon Junction the road forks. Stay on the side the sign points to and you take that route. Locked routes (🔒) open once you drive through that track's golden key 🔑, and stay open for you for the rest of the race.
+
+**Tricks:** in the air, tap A/D to spin or Space to flip. You can chain them. Land with the trick finished for a speed boost (bigger combos give a bigger boost). Land mid-trick and you lose speed.
+
+**Drifting:** hold Space while steering. The longer you hold it, the hotter the sparks get: blue, then orange, then pink.
 
 ### Battle controls
 

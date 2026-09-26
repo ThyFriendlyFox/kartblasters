@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TRACKS } from './trackdefs.js';
+import { TRACKS, TrackTurtle } from './trackdefs.js';
 
 const DS = 1; // physics sample spacing along the track (world units)
 
@@ -8,26 +8,23 @@ function wrapAngle(a) {
 }
 
 /**
- * A closed 3D track. The centerline is sampled every DS units into
- * position (P), tangent (T), up (N) and right (R) frames. Frames use
- * parallel transport so loops and corkscrews keep the road "up" pointing
- * at the driver, plus automatic banking in corners.
+ * A 3D road centerline sampled every DS units into position (P), tangent (T),
+ * up (N) and right (R) frames. Frames use parallel transport so loops and
+ * corkscrews keep "up" pointing at the driver, plus automatic banking.
+ * The main circuit is a closed Path; alternate routes are open Paths.
  */
-export class Track {
-  constructor(id) {
-    const def = (this.def = TRACKS[id] || TRACKS.orange);
-    this.id = TRACKS[id] ? id : 'orange';
-    this.hw = def.width / 2;
-    const turtle = def.build();
-    this.marks = turtle.marks || {};
-    const pts = turtle.pts;
-    const curve = new THREE.CatmullRomCurve3(pts.map((p) => p.p), true, 'centripetal');
+export class Path {
+  constructor(pts, { closed = true, hw = 7.5, N0 = null } = {}) {
+    this.closed = closed;
+    this.hw = hw;
+    const curve = new THREE.CatmullRomCurve3(pts.map((p) => p.p), closed, 'centripetal');
     curve.arcLengthDivisions = pts.length * 12;
     const L = curve.getLength();
-    const n = Math.round(L / DS);
+    const n = closed ? Math.round(L / DS) : Math.round(L / DS) + 1;
     this.n = n;
-    this.ds = L / n;
+    this.ds = closed ? L / n : L / (n - 1);
     this.L = L;
+    const nb = (i) => (closed ? ((i % n) + n) % n : Math.max(0, Math.min(n - 1, i)));
 
     const P = (this.P = new Float32Array(n * 3));
     const T = (this.T = new Float32Array(n * 3));
@@ -36,42 +33,45 @@ export class Track {
     this.k = new Float32Array(n); // curvature toward +R (1/units)
     this.gap = new Uint8Array(n);
     this.boost = new Uint8Array(n);
+    this.kick = new Uint8Array(n);
+    this.railL = new Uint8Array(n).fill(1);
+    this.railR = new Uint8Array(n).fill(1);
     this.color = [];
 
     const np = pts.length;
     const roll = new Float32Array(n);
     const v = new THREE.Vector3(), t = new THREE.Vector3();
     for (let i = 0; i < n; i++) {
-      const u = i / n;
+      const u = closed ? i / n : i / (n - 1);
       curve.getPointAt(u, v);
       curve.getTangentAt(u, t);
       P.set([v.x, v.y, v.z], i * 3);
       T.set([t.x, t.y, t.z], i * 3);
       // Map to control point index to fetch per-point attributes
-      const f = curve.getUtoTmapping(u) * np;
-      const i0 = Math.floor(f) % np, i1 = (i0 + 1) % np, fr = f - Math.floor(f);
+      const f = curve.getUtoTmapping(u) * (closed ? np : np - 1);
+      const i0 = Math.min(Math.floor(f), np - 1) % np, i1 = closed ? (i0 + 1) % np : Math.min(i0 + 1, np - 1), fr = f - Math.floor(f);
       const a = pts[i0], b = pts[i1];
       roll[i] = a.roll + wrapAngle(b.roll - a.roll) * fr;
       this.gap[i] = a.gap && b.gap ? 1 : a.gap && fr < 0.5 ? 1 : b.gap && fr >= 0.5 ? 1 : 0;
       this.boost[i] = (fr < 0.5 ? a.boost : b.boost) ? 1 : 0;
+      this.kick[i] = a.kick || b.kick ? 1 : 0;
       this.color.push((fr < 0.5 ? a.color : b.color) || '#ff7a00');
     }
 
     // Parallel-transport the up vector along the curve
-    const Ti = new THREE.Vector3(), Tp = new THREE.Vector3(), Nv = new THREE.Vector3(0, 1, 0), axis = new THREE.Vector3();
+    const Ti = new THREE.Vector3(), Tp = new THREE.Vector3(), Nv = N0 ? N0.clone() : new THREE.Vector3(0, 1, 0), axis = new THREE.Vector3();
     const q = new THREE.Quaternion();
     Tp.fromArray(T, 0);
     Nv.addScaledVector(Tp, -Nv.dot(Tp)).normalize();
-    const N0 = Nv.clone();
+    const Nstart = Nv.clone();
     const Nt = [];
     for (let i = 0; i < n; i++) {
       Ti.fromArray(T, i * 3);
       if (i > 0) {
         axis.crossVectors(Tp, Ti);
-        const s = axis.length();
-        if (s > 1e-8) {
-          const ang = Math.atan2(s, Tp.dot(Ti));
-          q.setFromAxisAngle(axis.divideScalar(s), ang);
+        const sn = axis.length();
+        if (sn > 1e-8) {
+          q.setFromAxisAngle(axis.divideScalar(sn), Math.atan2(sn, Tp.dot(Ti)));
           Nv.applyQuaternion(q);
         }
         Nv.addScaledVector(Ti, -Nv.dot(Ti)).normalize();
@@ -79,13 +79,17 @@ export class Track {
       Nt.push(Nv.clone());
       Tp.copy(Ti);
     }
-    // Close the frame: remove accumulated twist so the seam lines up
-    Ti.fromArray(T, 0);
-    axis.crossVectors(Tp, Ti);
-    const endN = Nv.clone();
-    if (axis.length() > 1e-8) endN.applyQuaternion(q.setFromAxisAngle(axis.normalize(), Math.atan2(axis.length(), Tp.dot(Ti))));
-    const cr = new THREE.Vector3().crossVectors(endN, N0);
-    const twist = Math.atan2(cr.dot(Ti), endN.dot(N0));
+    // Closed loops: remove accumulated twist so the seam lines up
+    let twist = 0;
+    if (closed) {
+      Ti.fromArray(T, 0);
+      axis.crossVectors(Tp, Ti);
+      const endN = Nv.clone();
+      const sn = axis.length();
+      if (sn > 1e-8) endN.applyQuaternion(q.setFromAxisAngle(axis.divideScalar(sn), Math.atan2(sn, Tp.dot(Ti))));
+      const cr = new THREE.Vector3().crossVectors(endN, Nstart);
+      twist = Math.atan2(cr.dot(Ti), endN.dot(Nstart));
+    }
 
     // Base frames (with twist correction and explicit roll)
     const Rv = new THREE.Vector3();
@@ -101,58 +105,57 @@ export class Track {
     const bank = new Float32Array(n);
     const tA = new THREE.Vector3(), tB = new THREE.Vector3();
     for (let i = 0; i < n; i++) {
-      tA.fromArray(T, ((i - 2 + n) % n) * 3);
-      tB.fromArray(T, ((i + 2) % n) * 3);
+      tA.fromArray(T, nb(i - 2) * 3);
+      tB.fromArray(T, nb(i + 2) * 3);
       const kR = tB.sub(tA).divideScalar(4 * this.ds).dot(baseR[i]);
       bank[i] = THREE.MathUtils.clamp(kR * 16, -0.7, 0.7) * Math.max(0, Nt[i].y);
     }
-    const sm = new Float32Array(n);
     const W = 18;
     for (let i = 0; i < n; i++) {
       let acc = 0;
-      for (let j = -W; j <= W; j++) acc += bank[(i + j + n) % n];
-      sm[i] = acc / (2 * W + 1);
-    }
-
-    for (let i = 0; i < n; i++) {
+      for (let j = -W; j <= W; j++) acc += bank[nb(i + j)];
+      // Open routes start and end level so they meet the main road cleanly
+      const edge = closed ? 1 : Math.min(1, i / 30, (n - 1 - i) / 30);
       Ti.fromArray(T, i * 3);
-      const nv = Nt[i].applyAxisAngle(Ti, sm[i]);
+      const nv = Nt[i].applyAxisAngle(Ti, (acc / (2 * W + 1)) * edge);
       Rv.crossVectors(Ti, nv).normalize();
       N.set([nv.x, nv.y, nv.z], i * 3);
       R.set([Rv.x, Rv.y, Rv.z], i * 3);
     }
     for (let i = 0; i < n; i++) {
-      tA.fromArray(T, ((i - 1 + n) % n) * 3);
-      tB.fromArray(T, ((i + 1) % n) * 3);
+      tA.fromArray(T, nb(i - 1) * 3);
+      tB.fromArray(T, nb(i + 1) * 3);
       Rv.fromArray(R, i * 3);
       this.k[i] = tB.sub(tA).divideScalar(2 * this.ds).dot(Rv);
     }
 
-    // Useful markers
     this.gaps = [];
     for (let i = 0; i < n; i++) {
-      if (this.gap[i] && !this.gap[(i - 1 + n) % n]) {
+      if (this.gap[i] && !(i > 0 || closed ? this.gap[nb(i - 1)] : 0)) {
         let j = i;
-        while (this.gap[j % n]) j++;
+        while (j < n * 2 && this.gap[nb(j)]) j++;
         this.gaps.push({ start: i * this.ds, end: j * this.ds });
       }
     }
   }
 
   idx(s) {
+    if (!this.closed) return Math.max(0, Math.min(this.n - 1, Math.floor(s / this.ds)));
     let i = Math.floor(s / this.ds) % this.n;
     if (i < 0) i += this.n;
     return i;
   }
 
   wrap(s) {
+    if (!this.closed) return Math.max(0, Math.min(this.L, s));
     s %= this.L;
     return s < 0 ? s + this.L : s;
   }
 
-  /** Signed shortest distance from a to b along the loop. */
+  /** Signed shortest distance from a to b along the path. */
   delta(a, b) {
     let d = b - a;
+    if (!this.closed) return d;
     if (d > this.L / 2) d -= this.L;
     if (d < -this.L / 2) d += this.L;
     return d;
@@ -162,7 +165,18 @@ export class Track {
   frame(s, out) {
     s = this.wrap(s);
     const f = s / this.ds;
-    const i = Math.floor(f) % this.n, j = (i + 1) % this.n, t = f - Math.floor(f);
+    let i = Math.floor(f), t = f - i;
+    let j;
+    if (this.closed) {
+      i %= this.n;
+      j = (i + 1) % this.n;
+    } else {
+      if (i >= this.n - 1) {
+        i = this.n - 2;
+        t = 1;
+      }
+      j = i + 1;
+    }
     for (const key of ['P', 'T', 'N', 'R']) {
       const a = this[key];
       out[key].set(
@@ -185,26 +199,36 @@ export class Track {
     return { P: new THREE.Vector3(), T: new THREE.Vector3(), N: new THREE.Vector3(), R: new THREE.Vector3(), k: 0, gap: 0, boost: 0, i: 0 };
   }
 
-  /** World position of a point in track coordinates. */
-  toWorld(s, d, h, out, fr = Track.newFrame()) {
+  /** World position of a point in path coordinates. */
+  toWorld(s, d, h, out, fr = Path.newFrame()) {
     this.frame(s, fr);
     return out.copy(fr.P).addScaledVector(fr.R, d).addScaledVector(fr.N, h);
   }
 
-  // ---------------- rendering ----------------
-
-  build(scene) {
-    const theme = this.def.theme;
-    buildEnvironment(scene, theme, this);
-    this.buildRoad(scene, theme);
+  /** Nearest sample index to a world point (used to locate route marks). */
+  nearest(p) {
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < this.n; i++) {
+      const d = (this.P[i * 3] - p.x) ** 2 + (this.P[i * 3 + 1] - p.y) ** 2 + (this.P[i * 3 + 2] - p.z) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    return best;
   }
 
-  buildRoad(scene, theme) {
+  buildRoad(scene, theme, { startLine = false, lift = 0 } = {}) {
     const n = this.n, hw = this.hw;
     const STEP = 2; // mesh every 2 samples
     const rows = [];
-    for (let i = 0; i <= n; i += STEP) rows.push(i % n);
-    if (rows[rows.length - 1] !== 0) rows.push(0);
+    if (this.closed) {
+      for (let i = 0; i <= n; i += STEP) rows.push(i % n);
+      if (rows[rows.length - 1] !== 0) rows.push(0);
+    } else {
+      for (let i = 0; i < n; i += STEP) rows.push(i);
+      if (rows[rows.length - 1] !== n - 1) rows.push(n - 1);
+    }
 
     // Cross-section: [lateral, normal] pairs; each strip is a quad band
     const railH = 1.0, railW = 0.6, thick = 0.6;
@@ -224,18 +248,20 @@ export class Track {
 
     const P = new THREE.Vector3(), N = new THREE.Vector3(), R = new THREE.Vector3();
     const col = new THREE.Color();
-    const build = (list, uvScale, useColor) => {
+    const build = (list, uvScale, useColor, isRail = false) => {
       const pos = [], uv = [], colors = [];
       for (let r = 0; r < rows.length - 1; r++) {
         const i0 = rows[r], i1 = rows[r + 1];
         if (this.gap[i0] || this.gap[i1]) continue;
-        for (const [a, b] of list) {
+        for (let li = 0; li < list.length; li++) {
+          const [a, b] = list[li];
+          if (isRail && !(li < 3 ? this.railL[i0] && this.railL[i1] : this.railR[i0] && this.railR[i1])) continue;
           const quad = [];
           for (const [ii, pt, uu] of [[i0, a, 0], [i0, b, 1], [i1, b, 1], [i1, a, 0]]) {
             P.fromArray(this.P, ii * 3);
             N.fromArray(this.N, ii * 3);
             R.fromArray(this.R, ii * 3);
-            P.addScaledVector(R, pt[0]).addScaledVector(N, pt[1]);
+            P.addScaledVector(R, pt[0]).addScaledVector(N, pt[1] + lift);
             const vv = ((ii === 0 && r > 0 ? n : ii) * this.ds) / uvScale;
             quad.push([P.x, P.y, P.z, uu, vv, ii]);
           }
@@ -274,7 +300,7 @@ export class Track {
 
     const roadMesh = new THREE.Mesh(build(strips.road, 16, true), roadMat);
     roadMesh.receiveShadow = true;
-    const railMesh = new THREE.Mesh(build(strips.rail, 16, !neon), railMat);
+    const railMesh = new THREE.Mesh(build(strips.rail, 16, !neon, true), railMat);
     railMesh.castShadow = true;
     const underMesh = new THREE.Mesh(build(strips.under, 16, false), underMat);
     underMesh.castShadow = true;
@@ -285,9 +311,9 @@ export class Track {
     const padMat = new THREE.MeshBasicMaterial({ map: padTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
     this.padMats = [padMat];
     for (let i = 0; i < n; i++) {
-      if (!this.boost[i] || this.boost[(i - 1 + n) % n]) continue;
+      if (!this.boost[i] || (i > 0 || this.closed ? this.boost[(i - 1 + n) % n] : 0)) continue;
       let j = i;
-      while (this.boost[j % n]) j++;
+      while (j < i + n && this.boost[j % n] && (this.closed || j < n - 1)) j++;
       const len = j - i;
       const pos = [], uv = [];
       for (let k = i; k < j; k++) {
@@ -304,8 +330,13 @@ export class Track {
       scene.add(new THREE.Mesh(g, padMat));
     }
 
-    // Start / finish line + arch
-    const fr = Track.newFrame();
+    const fr = Path.newFrame();
+    if (startLine) this.buildStart(scene, neon, fr);
+    this.buildStands(scene, neon);
+  }
+
+  buildStart(scene, neon, fr) {
+    const hw = this.hw;
     this.frame(0, fr);
     const line = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, 3), new THREE.MeshBasicMaterial({ map: checkerTexture() }));
     line.position.copy(fr.P).addScaledVector(fr.N, 0.06);
@@ -322,7 +353,11 @@ export class Track {
     banner.position.copy(fr.P).addScaledVector(fr.N, 9);
     banner.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(fr.R.clone().negate(), fr.N, fr.T.clone().negate()));
     scene.add(banner);
+  }
 
+  buildStands(scene, neon) {
+    const n = this.n;
+    const P = new THREE.Vector3(), N = new THREE.Vector3();
     // Support stands under the track
     const standMat = new THREE.MeshStandardMaterial({ color: neon ? '#3b3f5c' : '#9aa3ad', metalness: neon ? 0.6 : 0.1, roughness: 0.5 });
     const glowMat = new THREE.MeshBasicMaterial({ color: '#00e5ff' });
@@ -345,6 +380,148 @@ export class Track {
 
   update(dt) {
     for (const m of this.padMats || []) m.map.offset.y -= dt * 2.5;
+  }
+}
+
+/**
+ * The race circuit: a closed main Path plus optional alternate routes
+ * (branches) that fork off one side of the road and rejoin later, some
+ * locked behind key pickups.
+ */
+export class Track extends Path {
+  constructor(id) {
+    const def = TRACKS[id] || TRACKS.orange;
+    const turtle = def.build();
+    super(turtle.pts, { closed: true, hw: def.width / 2 });
+    this.def = def;
+    this.id = TRACKS[id] ? id : 'orange';
+    this.marks = turtle.marks || {};
+    this.branches = [];
+    this.keys = [];
+    const fr = Path.newFrame();
+    const markS = (name) => {
+      const m = this.marks[name];
+      if (!m) throw new Error(`Track ${id}: missing mark ${name}`);
+      return this.nearest(m.pos) * this.ds;
+    };
+    (def.branches || []).forEach((bd, bi) => {
+      const a = markS(bd.from), b = markS(bd.to);
+      const side = bd.side || 1;
+      const off = side * this.hw * 0.5;
+      this.frame(a, fr);
+      const start = fr.P.clone().addScaledVector(fr.R, off);
+      const N0 = fr.N.clone();
+      const bt = new TrackTurtle(start.x, start.y, start.z, Math.atan2(fr.T.x, fr.T.z), def.width).paint(bd.color || '#ff7a00');
+      bd.build(bt);
+      this.frame(b, fr);
+      bt.closeTo(fr.P.clone().addScaledVector(fr.R, off), Math.atan2(fr.T.x, fr.T.z));
+      const path = new Path(bt.pts, { closed: false, hw: this.hw, N0 });
+      const edge = Math.round(40 / path.ds);
+      // Hide the rails where the routes overlap the main road
+      const inner = side > 0 ? path.railL : path.railR;
+      for (let i = 0; i < Math.min(edge, path.n); i++) inner[i] = inner[path.n - 1 - i] = 0;
+      const mainRail = side > 0 ? this.railR : this.railL;
+      for (let s = a - 4; s < a + 44; s += this.ds) mainRail[this.idx(s)] = 0;
+      for (let s = b - 44; s < b + 4; s += this.ds) mainRail[this.idx(s)] = 0;
+      this.branches.push({ id: bi + 1, path, from: a, to: b, side, off, name: bd.name || 'ALT ROUTE', lock: bd.lock || null });
+    });
+    for (const k of def.keys || []) this.keys.push({ id: k.id, s: markS(k.at), d: k.d || 0 });
+  }
+
+  /** The Path a car on `route` drives on (0 = main circuit). */
+  pathOf(route) {
+    return route ? this.branches[route - 1]?.path || this : this;
+  }
+
+  /** Race progress along the main circuit, mapping branch distance onto it. */
+  progress(car) {
+    const br = car.route ? this.branches[car.route - 1] : null;
+    const s = br ? br.from + (car.s / br.path.L) * (br.to - br.from) : car.s;
+    return car.lap * this.L + s;
+  }
+
+  build(scene) {
+    const theme = this.def.theme;
+    buildEnvironment(scene, theme, this);
+    this.buildRoad(scene, theme, { startLine: true });
+    for (const br of this.branches) br.path.buildRoad(scene, theme, { lift: 0.03 });
+    this.buildRouteProps(scene, theme);
+  }
+
+  /** Signs over each fork, lock gates on locked routes and key pickups. */
+  buildRouteProps(scene, theme) {
+    const fr = Path.newFrame();
+    this.gates = new Map();
+    this.keyMeshes = new Map();
+    for (const br of this.branches) {
+      // Sign gantry just before the fork, over the branch half of the road
+      this.frame(br.from - 22, fr);
+      const sign = new THREE.Mesh(
+        new THREE.BoxGeometry(this.hw, 2.4, 0.4),
+        new THREE.MeshBasicMaterial({ map: signTexture(`${br.lock ? '🔒 ' : ''}${br.name} ${br.side > 0 ? '➜' : '⬅'}`, br.lock ? '#ffd000' : '#00e5ff') }),
+      );
+      sign.position.copy(fr.P).addScaledVector(fr.R, br.off).addScaledVector(fr.N, 8);
+      sign.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(fr.R.clone().negate(), fr.N, fr.T.clone().negate()));
+      scene.add(sign);
+      const postMat = new THREE.MeshStandardMaterial({ color: '#444a55' });
+      for (const e of [-1, 1]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.4, 8, 0.4), postMat);
+        post.position.copy(fr.P).addScaledVector(fr.R, br.off + (e * this.hw) / 2).addScaledVector(fr.N, 4);
+        post.quaternion.copy(sign.quaternion);
+        scene.add(post);
+      }
+      if (!br.lock) continue;
+      // Force-field gate where the route has split away from the main road
+      const gs = Math.min(br.path.L * 0.3, 45);
+      br.path.frame(gs, fr);
+      const gate = new THREE.Group();
+      const field = new THREE.Mesh(
+        new THREE.PlaneGeometry(this.hw * 2, 4.5),
+        new THREE.MeshBasicMaterial({ map: gateTexture(), transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }),
+      );
+      field.position.y = 2.25;
+      gate.add(field);
+      gate.position.copy(fr.P);
+      gate.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(fr.R, fr.N, fr.T.clone().negate()));
+      scene.add(gate);
+      br.gateS = gs;
+      this.gates.set(br.lock, gate);
+    }
+    const keyMat = new THREE.MeshStandardMaterial({ color: '#ffd000', emissive: '#aa7a00', metalness: 0.8, roughness: 0.25 });
+    for (const k of this.keys) {
+      const g = new THREE.Group();
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.22, 10, 20), keyMat);
+      ring.position.y = 0.9;
+      const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.8, 0.3), keyMat);
+      shaft.position.y = -0.4;
+      const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.25, 0.3), keyMat);
+      tooth.position.set(0.35, -1.1, 0);
+      g.add(ring, shaft, tooth);
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(1.6, 16, 12), new THREE.MeshBasicMaterial({ color: '#ffe066', transparent: true, opacity: 0.18, depthWrite: false }));
+      g.add(glow);
+      this.toWorld(k.s, k.d, 2.6, g.position, fr);
+      g.userData.base = g.position.clone();
+      g.userData.up = fr.N.clone();
+      scene.add(g);
+      this.keyMeshes.set(k.id, g);
+    }
+  }
+
+  /** Show only the gates / keys this player still needs. */
+  setOwnedKeys(owned) {
+    for (const [id, gate] of this.gates || []) gate.visible = !owned.has(id);
+    for (const [id, mesh] of this.keyMeshes || []) mesh.visible = !owned.has(id);
+  }
+
+  update(dt) {
+    super.update(dt);
+    for (const br of this.branches) br.path.update(dt);
+    const t = performance.now() * 0.003;
+    for (const m of this.keyMeshes?.values() || []) {
+      m.rotation.y += dt * 2.5;
+      m.position.copy(m.userData.base).addScaledVector(m.userData.up, Math.sin(t) * 0.3);
+    }
+    for (const g of this.gates?.values() || []) g.children[0].material.map.offset.x = (t * 0.2) % 1;
   }
 }
 
@@ -410,6 +587,40 @@ function checkerTexture() {
     }
   });
   return t;
+}
+
+function signTexture(text, color) {
+  return canvasTex(512, 96, (g, w, h) => {
+    g.fillStyle = '#10131c';
+    g.fillRect(0, 0, w, h);
+    g.strokeStyle = color;
+    g.lineWidth = 8;
+    g.strokeRect(4, 4, w - 8, h - 8);
+    g.font = 'bold 50px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillStyle = color;
+    g.fillText(text, w / 2, h / 2 + 2);
+  });
+}
+
+function gateTexture() {
+  return canvasTex(256, 128, (g, w, h) => {
+    g.fillStyle = 'rgba(255,40,90,0.35)';
+    g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(255,120,160,0.9)';
+    g.lineWidth = 4;
+    for (let x = -h; x < w; x += 24) {
+      g.beginPath();
+      g.moveTo(x, h);
+      g.lineTo(x + h, 0);
+      g.stroke();
+    }
+    g.font = 'bold 44px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.fillStyle = '#fff';
+    g.fillText('🔒 KEY', w / 2, h / 2 + 15);
+  });
 }
 
 function bannerTexture(neon) {

@@ -39,6 +39,28 @@ export class Sfx {
     this.engGain.connect(this.master);
   }
 
+  /** Continuous tire screech while drifting (level 0..1). */
+  screech(level) {
+    if (!this.ctx) return;
+    if (!this.scr) {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.noise;
+      src.loop = true;
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 2600;
+      bp.Q.value = 4;
+      this.scr = this.ctx.createGain();
+      this.scr.gain.value = 0;
+      src.connect(bp).connect(this.scr).connect(this.master);
+      src.start();
+      this.scrFilter = bp;
+    }
+    const t = this.ctx.currentTime;
+    this.scr.gain.setTargetAtTime(level * 0.16, t, 0.05);
+    this.scrFilter.frequency.setTargetAtTime(2200 + level * 900 + Math.random() * 300, t, 0.05);
+  }
+
   setMuted(m) {
     this.muted = m;
     if (this.master) this.master.gain.value = m ? 0 : 0.45;
