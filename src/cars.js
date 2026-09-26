@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildLongtail, longtailRim, LONGTAIL_WHEELS } from './longtail.js';
 
 /** Selectable cars. Stats are multipliers used by both battle and race physics. */
 export const CARS = {
@@ -7,6 +8,7 @@ export const CARS = {
   formula: { name: 'Formula', desc: 'Grippy and quick, but fragile', speed: 1.04, accel: 1.05, grip: 1.15, hp: 85 },
   buggy: { name: 'Buggy', desc: 'Punchy acceleration, great grip', speed: 0.95, accel: 1.15, grip: 1.1, hp: 100 },
   truck: { name: 'Brute', desc: 'Slow, but takes a beating', speed: 0.92, accel: 0.88, grip: 0.95, hp: 135 },
+  longtail: { name: 'Longtail 17', desc: 'Gold 70s endurance racer, flat-12', speed: 1.09, accel: 0.97, grip: 0.97, hp: 90 },
 };
 export const CAR_IDS = Object.keys(CARS);
 
@@ -114,6 +116,14 @@ export function buildCar(type, color) {
       roofY = 2.3;
       break;
     }
+    case 'longtail': {
+      // Fixed gold race livery; the player's color tints one pinstripe
+      const L = LONGTAIL_WHEELS;
+      wheel = [L.r, L.width, L.front, L.rear, L.track, L.rearScale];
+      buildLongtail(body, color);
+      roofY = 1.3;
+      break;
+    }
     default: {
       // hyper
       wheel = [0.44, 0.42, 1.4, -1.35, 1.0, 1.08];
@@ -127,17 +137,19 @@ export function buildCar(type, color) {
     }
   }
 
-  // Lights (skip on truck which added its own)
-  if (type !== 'truck') {
+  // Lights (truck and longtail have their own)
+  if (type !== 'truck' && type !== 'longtail') {
     const fz = { muscle: 2.25, formula: 2.0, buggy: 1.95 }[type] ?? 2.3;
     const fy = { buggy: 0.95, formula: 0.5 }[type] ?? 0.65;
     add(box(0.4, 0.14, 0.08), head, 0.6, fy, fz);
     add(box(0.4, 0.14, 0.08), head, -0.6, fy, fz);
   }
-  const rz = { muscle: -2.27, formula: -1.95, buggy: -1.72, truck: -2.37 }[type] ?? -2.27;
+  const rz = { muscle: -2.27, formula: -1.95, buggy: -1.72, truck: -2.37, longtail: -2.4 }[type] ?? -2.27;
   const ry = { buggy: 0.9, truck: 1.3 }[type] ?? 0.7;
-  add(box(0.5, 0.14, 0.08), tail, 0.6, ry, rz);
-  add(box(0.5, 0.14, 0.08), tail, -0.6, ry, rz);
+  if (type !== 'longtail') {
+    add(box(0.5, 0.14, 0.08), tail, 0.6, ry, rz);
+    add(box(0.5, 0.14, 0.08), tail, -0.6, ry, rz);
+  }
 
   // Wheels
   const [r, w, fz, rz2, track, rs] = wheel;
@@ -152,8 +164,8 @@ export function buildCar(type, color) {
     body.add(pivot);
     const tire = new THREE.Mesh(new THREE.CylinderGeometry(r * sc, r * sc, w, 18).rotateZ(Math.PI / 2), tireMat);
     tire.castShadow = true;
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(r * sc * 0.6, r * sc * 0.6, w + 0.02, 6).rotateZ(Math.PI / 2), rimMat);
-    tire.add(rim);
+    if (type === 'longtail') longtailRim(tire, r * sc, w);
+    else tire.add(new THREE.Mesh(new THREE.CylinderGeometry(r * sc * 0.6, r * sc * 0.6, w + 0.02, 6).rotateZ(Math.PI / 2), rimMat));
     pivot.add(tire);
     wheels.push(tire);
     if (front) frontPivots.push(pivot);

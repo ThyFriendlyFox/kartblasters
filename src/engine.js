@@ -15,10 +15,12 @@ export const ENGINES = {
   v8: { label: 'V8', fire: [0, 90, 180, 270, 360, 450, 540, 630], amp: [1, 0.62, 0.9, 0.55, 1, 0.7, 0.85, 0.5], jitter: 5, res: 115, res2: 330, idle: 700, redline: 5200, body: 1 },
   v10: { label: 'V10', fire: even(10), amp: [1, 0.9, 0.97, 0.88, 1, 0.92, 0.95, 0.9, 1, 0.9], res: 260, res2: 700, idle: 1050, redline: 6600, body: 0.7 },
   flat4: { label: 'Flat-4', fire: [0, 180, 360, 540], amp: [1, 0.8, 0.95, 0.75], jitter: 8, uneven: [0, 12, -8, 6], res: 140, res2: 400, idle: 850, redline: 5400, body: 0.9 },
+  // Flat-12: twelve even pulses, high-revving and raspy
+  flat12: { label: 'Flat-12', fire: even(12), amp: [1, 0.9, 0.97, 0.86, 1, 0.92, 0.98, 0.88, 1, 0.9, 0.96, 0.87], jitter: 3, res: 240, res2: 610, idle: 1000, redline: 7200, body: 0.75 },
   bigv8: { label: 'Big-block V8', fire: [0, 90, 180, 270, 360, 450, 540, 630], amp: [1, 0.55, 0.95, 0.5, 1, 0.65, 0.9, 0.45], jitter: 7, res: 85, res2: 240, idle: 600, redline: 4300, body: 1.15 },
 };
 
-export const CAR_ENGINES = { hyper: 'v12', muscle: 'v8', formula: 'v10', buggy: 'flat4', truck: 'bigv8' };
+export const CAR_ENGINES = { hyper: 'v12', muscle: 'v8', formula: 'v10', buggy: 'flat4', truck: 'bigv8', longtail: 'flat12' };
 
 const WORKLET = `
 class EngineProcessor extends AudioWorkletProcessor {

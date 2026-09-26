@@ -16,6 +16,7 @@ Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no ga
 | Formula | Grippy and quick, but fragile in battle |
 | Buggy | Punchy acceleration, great grip |
 | Brute | Slow, but takes a beating (135 HP) |
+| Longtail 17 | Gold 1970s long-tail endurance racer: highest top speed, a little less grip (90 HP). Always wears its gold #17 race livery; your color tints one side pinstripe |
 
 ## Maps
 
@@ -114,6 +115,7 @@ Take the jumps fast: if you come up short, you wipe out and respawn past the lan
   | Formula | V10 (rasp) |
   | Buggy | Flat-4 (boxer thrum) |
   | Brute | Big-block V8 (deep) |
+  | Longtail 17 | Flat-12 (high-revving scream) |
 
 - **Music:** a procedurally generated soundtrack, with one tune per map style and one for battle. Toggle it with the 🎵 checkbox in the menu or pause screen, or press **N**. **M** mutes everything.
 
