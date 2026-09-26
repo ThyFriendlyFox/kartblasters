@@ -555,12 +555,14 @@ export class Path {
       if (N.y < 0.8 || P.y < 3) continue;
       const top = P.clone().addScaledVector(N, -0.7);
       let floor = 0;
-      // Stand on the nearest road below instead of the ground, if there is one
-      for (let j = 0; j < n; j += 2) {
-        const py = this.P[j * 3 + 1];
-        if (py > top.y - 4) continue;
-        const dx = this.P[j * 3] - top.x, dz = this.P[j * 3 + 2] - top.z;
-        if (dx * dx + dz * dz < (this.hw + 3) ** 2) floor = Math.max(floor, py + 1.5);
+      // Any road (this one or another route) passing below?
+      for (const o of this.obstacles || [this]) {
+        for (let j = 0; j < o.n; j += 2) {
+          const py = o.P[j * 3 + 1];
+          if (py > top.y - 4) continue;
+          const dx = o.P[j * 3] - top.x, dz = o.P[j * 3 + 2] - top.z;
+          if (dx * dx + dz * dz < (this.hw + 3) ** 2) floor = Math.max(floor, py + 1.5);
+        }
       }
       if (floor > 0) continue; // don't pierce a road below
       const h = top.y - floor;
@@ -652,6 +654,11 @@ export class Track extends Path {
     for (const k of def.keys || []) this.keys.push({ id: k.id, s: markS(k.at), d: k.d || 0 });
     if (def.mountain) this.mountainS = [markS(def.mountain.from), markS(def.mountain.to)];
     this.pillars = def.pillars || null;
+    const all = [this, ...this.branches.map((b) => b.path)];
+    for (const p of all) {
+      p.pillars = this.pillars;
+      p.obstacles = all;
+    }
   }
 
   /**

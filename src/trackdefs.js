@@ -237,6 +237,13 @@ export class TrackTurtle {
     const pE = this.pos.clone(), dE = this.dir();
     const d0 = new THREE.Vector3(Math.sin(yaw0), 0, Math.cos(yaw0));
     const dist = pE.distanceTo(p0);
+    if (dist < 0.5) {
+      // Already there: no extra (duplicate) points, just settle exactly on it
+      this.pos.copy(p0);
+      this.yaw = yaw0;
+      if (includeEnd && this.pts.length) this.pts[this.pts.length - 1].p.copy(p0);
+      return this;
+    }
     const n = Math.max(2, Math.ceil((dist * 1.2) / STEP));
     const m0 = dE.clone().multiplyScalar(dist), m1 = d0.clone().multiplyScalar(dist);
     const p = new THREE.Vector3();
@@ -594,6 +601,69 @@ export const TRACKS = {
         return t;
       });
     },
+  },
+  chaos: {
+    name: 'Chaos Crossing',
+    desc: 'Epic: two stunt tracks tangled together, pick your line at every fork',
+    theme: 'neon',
+    width: 16,
+    flat: true,
+    pillars: 'truss',
+    build() {
+      return solveCircuit((a, b) => {
+        const K = 1.5;
+        const t = new TrackTurtle(0, 20, 0, 0, this.width).paint('#1f4bff');
+        t.straight(K * 40).boost(K * 14).straight(a);
+        // Fork 1: main line loops and rolls, SKY TOWER spirals up on the left and dives back in
+        t.mark('f1');
+        t.straight(K * 80).paint('#00d2ff').loop(36, 1).paint('#1f4bff').straight(K * 40);
+        t.paint('#ff2bd6').straight(K * 40, 7).straight(K * 40, -7).straight(K * 40, 7).straight(K * 40, -7).paint('#1f4bff');
+        t.straight(K * 170).mark('j1');
+        t.straight(K * 30);
+        // Climbing wall-ride U-turn, corkscrew, gap
+        t.paint('#ffe600').wallride(-180, K * 45, 78, 20).paint('#1f4bff');
+        t.straight(K * 60).paint('#b400ff').corkscrew(K * 90, 1).paint('#1f4bff').straight(K * 40);
+        t.paint('#ffe600').ramp(14, 2).gap(46, -2).paint('#1f4bff').straight(K * 60);
+        t.turn(-90, K * 50);
+        // Fork 2 (heading west): main line corkscrews and jumps, WALL STACK climbs a stacked hairpin
+        t.straight(K * 20 + b).mark('f2');
+        t.straight(K * 80).paint('#b400ff').corkscrew(K * 90, 1).paint('#1f4bff').straight(K * 60);
+        t.paint('#ffe600').ramp(14, 2).gap(46, -2).paint('#1f4bff').straight(K * 50);
+        t.straight(K * 60).mark('j2');
+        t.straight(K * 30).turn(-90, K * 50);
+        // Heading north: climb with a wall-ride chicane
+        t.straight(K * 80, 24);
+        t.turn(35, K * 70).paint('#ff2bd6').wallride(-70, K * 60, 65, 12).paint('#1f4bff').turn(35, K * 70);
+        t.straight(K * 120, 24);
+        // Wall-ride U-turn at the top, then the plunge back south over everything
+        t.paint('#00d2ff').wallride(-180, K * 55, 80).paint('#1f4bff');
+        t.straight(K * 60).boost(K * 14).straight(K * 220, -40);
+        t.paint('#ffe600').ramp(14, 2).gap(50, -4).paint('#1f4bff').straight(K * 290, -34);
+        t.paint('#00d2ff').loop(36, -1).paint('#1f4bff').straight(K * 24).paint('#ff2bd6').loop(36, -1).paint('#1f4bff');
+        t.straight(K * 40).turn(90, K * 50);
+        // Home run east along the bottom
+        t.straight(K * 60).paint('#ff2bd6').straight(K * 40, 6).straight(K * 40, -6).paint('#1f4bff').straight(K * 60, -4);
+        t.turn(90, K * 50);
+        return t;
+      });
+    },
+    branches: [
+      {
+        from: 'f1', to: 'j1', side: -1, name: 'SKY TOWER', color: '#00d2ff',
+        build(b) {
+          b.sOut(-36).straight(150).paint('#ff2bd6').turn(720, 52, 90).paint('#00d2ff');
+          b.straight(30).boost(14).straight(200, -90);
+        },
+      },
+      {
+        from: 'f2', to: 'j2', side: -1, name: 'WALL STACK', color: '#b400ff',
+        build(b) {
+          b.sOut(-36).straight(40).paint('#ff2bd6').wallride(180, 42, 78, 24).paint('#b400ff');
+          b.straight(60, 12).paint('#ff2bd6').wallride(180, 42, 78, 24).paint('#b400ff');
+          b.straight(40).straight(200, -60);
+        },
+      },
+    ],
   },
 };
 export const TRACK_IDS = Object.keys(TRACKS);

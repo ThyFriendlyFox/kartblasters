@@ -39,6 +39,7 @@ The menu shows an aerial preview of the selected map with its lap length and a r
 | Summit Rush | Race (epic, ~2 min lap) | Switchbacks up a snowy mountain, a leap off the summit and a plunge down the far side, plus loops, a corkscrew and a spiral flyover |
 | Canyon Colossus | Race (epic, ~2 min lap) | Stacked stunt park on lattice pillars: roads cross over and under each other, three wall rides, a spiral climb to a high line, two corkscrews, loops and a long plunge |
 | Skyline Spiral | Race (epic, ~2 min lap) | Neon stunt stack: climbing wall ride, loop, rooftop gaps, a corkscrew, two turns up a skyscraper, a dive onto a banked wall-ride descent, double loop and a wall-ride chicane |
+| Chaos Crossing | Race (epic, ~2 min lap) | The two stunt parks tangled together: a Canyon-style main line with roads crossing over and under each other, plus two forks into Skyline-style routes, SKY TOWER (a double spiral climb and a dive back in) and WALL STACK (a stacked, climbing wall-ride hairpin that passes over itself) |
 | Stadium | Battle | Walled arena with cover, jump pads, rocket/health/boost pickups |
 | Crater Field | Battle | Rolling hills with brick forts and stone pillars |
 

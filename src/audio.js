@@ -78,30 +78,68 @@ export class Sfx {
     }
   }
 
-  /** Continuous tire screech while drifting (level 0..1). */
+  /**
+   * Tyre sound while drifting (level 0..1): a soft, low rubber scrub plus a
+   * quiet squeal tone with a slow wobble. It swells in, settles a little
+   * once the drift is held, and fades out gently.
+   */
   screech(level) {
     if (!this.ctx) return;
+    const ctx = this.ctx;
     if (!this.scr) {
-      const src = this.ctx.createBufferSource();
+      const out = (this.scr = ctx.createGain());
+      out.gain.value = 0;
+      // Scrub: noise, rounded off so there's no hiss
+      const src = ctx.createBufferSource();
       src.buffer = this.noise;
       src.loop = true;
-      const bp = this.ctx.createBiquadFilter();
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 1100;
+      const bp = (this.scrFilter = ctx.createBiquadFilter());
       bp.type = 'bandpass';
-      bp.frequency.value = 2600;
-      bp.Q.value = 4;
-      this.scr = this.ctx.createGain();
-      this.scr.gain.value = 0;
-      src.connect(bp).connect(this.scr).connect(this.master);
+      bp.frequency.value = 520;
+      bp.Q.value = 0.9;
+      const scrub = ctx.createGain();
+      scrub.gain.value = 0.9;
+      src.connect(lp).connect(bp).connect(scrub).connect(out);
       src.start();
-      this.scrFilter = bp;
+      // Squeal: soft triangle tone with a slow vibrato
+      const osc = (this.scrOsc = ctx.createOscillator());
+      osc.type = 'triangle';
+      osc.frequency.value = 640;
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 4.5;
+      const depth = ctx.createGain();
+      depth.gain.value = 14;
+      lfo.connect(depth).connect(osc.frequency);
+      const tone = ctx.createGain();
+      tone.gain.value = 0.22;
+      const soft = ctx.createBiquadFilter();
+      soft.type = 'lowpass';
+      soft.frequency.value = 1400;
+      osc.connect(soft).connect(tone).connect(out);
+      osc.start();
+      lfo.start();
+      out.connect(this.master);
+      this.scrOn = 0;
     }
     // Only touch the params when the level really changes (see engine())
-    if (Math.abs(level - (this.scrLevel ?? -1)) < 0.04 && !(level === 0 && this.scrLevel !== 0)) return;
-    this.scrLevel = level;
-    const t = this.ctx.currentTime;
-    for (const [param, v] of [[this.scr.gain, level * 0.16], [this.scrFilter.frequency, 2200 + level * 900 + Math.random() * 300]]) {
+    const on = level > 0.02;
+    if (on) this.scrOn += 1 / 60;
+    else this.scrOn = 0;
+    const settle = on ? 1 - 0.35 * Math.min(1, this.scrOn / 1.5) : 0; // long drifts get quieter
+    const target = level * 0.075 * settle;
+    if (Math.abs(target - (this.scrLevel ?? -1)) < 0.004 && !(target === 0 && this.scrLevel !== 0)) return;
+    this.scrLevel = target;
+    const t = ctx.currentTime;
+    for (const [param, v, tc] of [
+      [this.scr.gain, target, on ? 0.09 : 0.18],
+      [this.scrFilter.frequency, 420 + level * 220, 0.2],
+      [this.scrOsc.frequency, 560 + level * 140, 0.25],
+    ]) {
       param.cancelScheduledValues(t);
-      param.setTargetAtTime(v, t, 0.05);
+      param.setTargetAtTime(v, t, tc);
     }
   }
 
