@@ -28,8 +28,8 @@ export class TrackTurtle {
     return new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
   }
 
-  emit(p, { gap = false, boost = false, kick = false } = {}) {
-    this.pts.push({ p: p.clone(), roll: this.roll, gap, boost, kick, color: this.col });
+  emit(p, { gap = false, boost = false, kick = false, up = null } = {}) {
+    this.pts.push({ p: p.clone(), roll: this.roll, gap, boost, kick, color: this.col, up });
   }
 
   paint(color) {
@@ -134,7 +134,9 @@ export class TrackTurtle {
       this.pos.copy(p0).addScaledVector(d, len * t)
         .addScaledVector(UP, radius * (1 - Math.cos(phi)))
         .addScaledVector(r, -radius * Math.sin(phi));
-      this.emit(this.pos, {});
+      // The road's up points at the tube's axis
+      const up = UP.clone().multiplyScalar(Math.cos(phi)).addScaledVector(r, Math.sin(phi));
+      this.emit(this.pos, { up });
     }
     return this;
   }

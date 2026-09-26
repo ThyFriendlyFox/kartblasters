@@ -44,6 +44,7 @@ export class Path {
 
     const np = pts.length;
     const roll = new Float32Array(n);
+    const upAt = new Array(n).fill(null); // explicit up (corkscrews)
     const v = new THREE.Vector3(), t = new THREE.Vector3();
     for (let i = 0; i < n; i++) {
       const u = closed ? i / n : i / (n - 1);
@@ -56,6 +57,7 @@ export class Path {
       const i0 = Math.min(Math.floor(f), np - 1) % np, i1 = closed ? (i0 + 1) % np : Math.min(i0 + 1, np - 1), fr = f - Math.floor(f);
       const a = pts[i0], b = pts[i1];
       roll[i] = a.roll + wrapAngle(b.roll - a.roll) * fr;
+      if (a.up && b.up) upAt[i] = a.up.clone().lerp(b.up, fr).normalize();
       this.gap[i] = a.gap && b.gap ? 1 : a.gap && fr < 0.5 ? 1 : b.gap && fr >= 0.5 ? 1 : 0;
       this.boost[i] = (fr < 0.5 ? a.boost : b.boost) ? 1 : 0;
       this.kick[i] = a.kick || b.kick ? 1 : 0;
@@ -99,13 +101,37 @@ export class Path {
     // its far end. Undo that inside the stunt itself, so the route rejoins
     // the main road level.
     const twistAt = new Float32Array(n);
+    // Corkscrews give their up explicitly (toward the tube's axis); parallel
+    // transport alone drifts through a helix. Steer the frame onto it there,
+    // and carry the correction on past the corkscrew.
+    const corr = new Float32Array(n);
+    if (upAt.some(Boolean)) {
+      let c = 0;
+      const nv = new THREE.Vector3(), tgt = new THREE.Vector3(), cr = new THREE.Vector3();
+      for (let i = 0; i < n; i++) {
+        if (upAt[i]) {
+          Ti.fromArray(T, i * 3);
+          nv.copy(Nt[i]).applyAxisAngle(Ti, roll[i]);
+          tgt.copy(upAt[i]).addScaledVector(Ti, -upAt[i].dot(Ti));
+          if (tgt.lengthSq() > 1e-6) {
+            tgt.normalize();
+            const raw = Math.atan2(cr.crossVectors(nv, tgt).dot(Ti), nv.dot(tgt));
+            c += wrapAngle(raw - c);
+          }
+        }
+        corr[i] = c;
+      }
+    }
     // (The main circuit keeps its seam twist spread over the whole lap: that
     // lean is part of its character.)
-    if (closed) for (let i = 0; i < n; i++) twistAt[i] = (twist * i) / n;
+    // (Minus whatever the corkscrew correction already covers at the seam.)
+    const seam = wrapAngle(twist - corr[n - 1]);
+    if (closed) for (let i = 0; i < n; i++) twistAt[i] = (seam * i) / n;
+    for (let i = 0; i < n; i++) twistAt[i] += corr[i];
     let need = 0;
     if (!closed && N1) {
       Ti.fromArray(T, (n - 1) * 3);
-      const endN = Nt[n - 1].clone().applyAxisAngle(Ti, roll[n - 1]);
+      const endN = Nt[n - 1].clone().applyAxisAngle(Ti, roll[n - 1] + corr[n - 1]);
       const target = N1.clone().addScaledVector(Ti, -N1.dot(Ti)).normalize();
       const cr = new THREE.Vector3().crossVectors(endN, target);
       need = Math.atan2(cr.dot(Ti), endN.dot(target));
@@ -116,11 +142,11 @@ export class Path {
       let tot = 0;
       for (let i = 0; i < n; i++) {
         const ty = T[i * 3 + 1];
-        tot += w[i] = ty ** 4 + 0.0005;
+        tot += w[i] = upAt[i] ? 0 : ty ** 4 + 0.0005;
       }
       let acc = 0;
       for (let i = 0; i < n; i++) {
-        twistAt[i] = (need * acc) / tot;
+        twistAt[i] += (need * acc) / tot;
         acc += w[i];
       }
     }
@@ -172,7 +198,7 @@ export class Path {
       tA.fromArray(T, nb(i - 2) * 3);
       tB.fromArray(T, nb(i + 2) * 3);
       const kR = tB.sub(tA).divideScalar(4 * this.ds).dot(baseR[i]);
-      bank[i] = THREE.MathUtils.clamp(kR * 16, -0.7, 0.7) * Math.max(0, Nt[i].y);
+      bank[i] = upAt[i] ? 0 : THREE.MathUtils.clamp(kR * 16, -0.7, 0.7) * Math.max(0, Nt[i].y);
     }
     const W = 18;
     for (let i = 0; i < n; i++) {
