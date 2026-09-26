@@ -401,6 +401,20 @@ export class Kart {
     return this.muzzle.getWorldPosition(out);
   }
 
+  /** Swap to a different car body (used when respawning with a new pick). */
+  setCar(type) {
+    if (!CARS[type] || type === this.carType) return false;
+    const visible = this.root.visible;
+    this.dispose();
+    this.carType = type;
+    this.stats = CARS[type];
+    this.maxHp = this.stats.hp;
+    this.hp = Math.min(this.hp, this.maxHp);
+    this.buildMesh();
+    this.root.visible = visible;
+    return true;
+  }
+
   dispose() {
     this.scene.remove(this.root);
     this.root.traverse((o) => {

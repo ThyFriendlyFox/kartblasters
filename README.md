@@ -69,6 +69,7 @@ Take the jumps fast: if you come up short, you wipe out and respawn before the r
 | Space | Drift / handbrake |
 | Tab | Scoreboard |
 | M | Mute |
+| Esc | Pause menu: change your car (takes effect when you next respawn) |
 
 **Practice offline vs AI** runs either mode with no network at all.
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { buildArena, pointBlocked } from './arena.js';
 import { Kart } from './kart.js';
-import { CAR_IDS } from './cars.js';
+import { CARS, CAR_IDS, carThumbnail } from './cars.js';
 import { Fx } from './fx.js';
 import { BotBrain, BOT_NAMES } from './bots.js';
 import { Hud } from './hud.js';
@@ -196,6 +196,16 @@ export class Game {
   }
 
   spawnKart(k) {
+    if (k === this.me && this.pendingCar) {
+      const car = this.pendingCar;
+      this.pendingCar = null;
+      if (k.setCar(car)) {
+        this.players.get(k.id).car = car;
+        this.net.send({ t: 'car', car });
+        this.hud.toast(`Now driving: ${CARS[car].name}`);
+      }
+      this.refreshCarSwap();
+    }
     k.spawnAt(this.pickSpawn(), performance.now());
     k.pos.y = this.world.groundAt(k.pos.x, k.pos.z);
     if (k === this.me) this.hud.clearCenter();
@@ -206,6 +216,7 @@ export class Game {
   bindInput() {
     const c = this.canvas;
     const overlay = document.getElementById('clickToPlay');
+    this.buildCarSwap();
     const lock = () => {
       this.sfx.init();
       c.requestPointerLock?.();
@@ -370,6 +381,15 @@ export class Game {
       case 'dig':
         this.applyDig(m, true);
         break;
+      case 'car': {
+        const k = this.karts.get(m.i);
+        const p = this.players.get(m.i);
+        if (k && p && !k.bot && CARS[m.car]) {
+          k.setCar(m.car);
+          p.car = m.car;
+        }
+        break;
+      }
       case 'blk':
         this.breakPiece(m.b, true);
         break;
@@ -598,6 +618,46 @@ export class Game {
         if (d < w.splash) this.damageBot(k.id, w.splashDmg * (1 - d / w.splash), p.owner, 'rocket', now);
       }
     }
+  }
+
+  // ---------- change car (pause menu) ----------
+
+  buildCarSwap() {
+    const wrap = document.getElementById('carSwap');
+    wrap.classList.remove('hidden');
+    const grid = wrap.querySelector('.swapGrid');
+    grid.innerHTML = '';
+    this.swapBtns = {};
+    for (const id of CAR_IDS) {
+      const b = document.createElement('button');
+      b.className = 'carBtn';
+      let img = '';
+      try {
+        img = `<img alt="" src="${carThumbnail(id, this.me.color, 72)}" />`;
+      } catch {}
+      b.innerHTML = `${img}<span>${CARS[id].name}</span><small>${CARS[id].hp} HP</small>`;
+      b.onclick = (e) => {
+        e.stopPropagation();
+        this.pendingCar = id === this.me.carType ? null : id;
+        this.refreshCarSwap();
+        if (this.pendingCar) this.hud.toast(`${CARS[id].name} ready: you'll switch on your next respawn`);
+      };
+      grid.appendChild(b);
+      this.swapBtns[id] = b;
+    }
+    this.refreshCarSwap();
+  }
+
+  refreshCarSwap() {
+    if (!this.swapBtns) return;
+    const next = this.pendingCar || this.me.carType;
+    for (const [id, b] of Object.entries(this.swapBtns)) {
+      b.classList.toggle('on', id === next);
+      b.classList.toggle('current', id === this.me.carType);
+    }
+    document.getElementById('carSwapNote').textContent = this.pendingCar
+      ? `Driving ${CARS[this.me.carType].name} · switching to ${CARS[this.pendingCar].name} on your next respawn`
+      : `Driving ${CARS[this.me.carType].name} · pick another car to swap to it when you respawn`;
   }
 
   // ---------- destructible terrain ----------
