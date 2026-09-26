@@ -285,7 +285,23 @@ class RaceCar {
   }
 
   respawn(track, fr) {
-    const prog = Math.max(0, this.safeProg - 70);
+    // Fell short of a jump: put the car down just past the landing so it can't get stuck retrying
+    for (const g of track.gaps) {
+      const into = track.delta(g.start, this.s);
+      if (into >= -5 && into <= g.end - g.start + 60) {
+        const s = track.wrap(g.end + 14);
+        if (s < this.s - track.L / 2) this.lap++;
+        this.s = s;
+        this.d = 0;
+        this.psi = 0;
+        this.v = 26;
+        this.flying = false;
+        this.safeProg = this.lap * track.L + s;
+        this.syncWorld(track, fr);
+        return;
+      }
+    }
+    const prog = Math.max(0, this.safeProg - 30);
     this.lap = Math.floor(prog / track.L);
     this.s = prog - this.lap * track.L;
     // Make sure we don't respawn inside a gap
@@ -570,6 +586,7 @@ export class RaceGame {
     window.addEventListener('blur', () => this.keys.clear());
     document.addEventListener('mousedown', () => this.sfx.init());
     document.addEventListener('click', (e) => {
+      if (e.target?.id === 'lobbyStart') this.hostStart();
       if (e.target?.id === 'copyLink') {
         const url = `${location.origin}${location.pathname}?room=${this.code}`;
         navigator.clipboard?.writeText(url).then(() => this.hud.toast('Invite link copied!'), () => this.hud.toast(url));
@@ -846,6 +863,10 @@ export class RaceGame {
     }
 
     this.track.update(dt);
+    if (this.track.smokeAt && Math.random() < dt * 5) {
+      _v.copy(this.track.smokeAt).add(_x.set((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8));
+      this.fx.spawn({ color: '#3a3032', pos: _v, vel: _x.set((Math.random() - 0.5) * 3, 6 + Math.random() * 4, (Math.random() - 0.5) * 3), life: 5, size: 5, grow: 4, opacity: 0.5 });
+    }
     this.fx.update(dt);
     this.sendSnapshot(now);
     this.updateCamera(dt);
@@ -989,7 +1010,7 @@ export class RaceGame {
     let msg = '';
     if (this.phase === 'lobby') {
       msg = this.net.isHost
-        ? `Free drive · <b>press Enter</b> to start a ${this.laps}-lap race${this.net.offline ? '' : ' when your friends are here'}`
+        ? `Free drive · ${this.net.offline ? '' : 'invite friends, then '}<button id="lobbyStart">Start ${this.laps}-lap race</button> <small>(or Enter)</small>`
         : 'Free drive · waiting for the host to start the race';
     } else if (this.phase === 'spectate') msg = 'Spectating · you will join the next race';
     hud.set('lobby', lobbyMsg, 'html', msg);

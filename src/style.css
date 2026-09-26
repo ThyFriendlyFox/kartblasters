@@ -438,3 +438,5 @@ body.mode-race #killfeed { top: auto; bottom: 200px; right: auto; left: 18px; al
   #raceHud .pos span { font-size: 44px; }
   #lobbyMsg { white-space: normal; width: 90%; text-align: center; border-radius: 14px; }
 }
+#lobbyMsg button { pointer-events: auto; padding: 6px 12px; margin: 0 4px; border-radius: 999px; background: var(--accent); }
+#lobbyMsg small { color: var(--muted); }

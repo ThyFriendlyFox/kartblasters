@@ -19,6 +19,7 @@ export class Track {
     this.id = TRACKS[id] ? id : 'orange';
     this.hw = def.width / 2;
     const turtle = def.build();
+    this.marks = turtle.marks || {};
     const pts = turtle.pts;
     const curve = new THREE.CatmullRomCurve3(pts.map((p) => p.p), true, 'centripetal');
     curve.arcLengthDivisions = pts.length * 12;
@@ -481,50 +482,100 @@ function buildEnvironment(scene, theme, track) {
       scene.add(cap);
     });
   } else {
-    scene.background = new THREE.Color('#8fd3ff');
-    scene.fog = new THREE.Fog('#bfe6ff', 300, 1100);
-    scene.add(new THREE.HemisphereLight('#e6f6ff', '#5b8a3a', 1.5));
-    const sun = new THREE.DirectionalLight('#fff4e0', 2.4);
-    sun.position.set(120, 220, 80);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    const sc = sun.shadow.camera;
-    sc.left = sc.bottom = -260;
-    sc.right = sc.top = 260;
-    sc.near = 10;
-    sc.far = 700;
-    sun.shadow.bias = -0.0008;
-    // Aim the shadow box at the middle of the track
-    const c = trackCenter(track);
-    sun.position.add(c);
-    sun.target.position.copy(c);
-    scene.add(sun, sun.target);
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(3000, 3000),
-      new THREE.MeshLambertMaterial({
-        map: canvasTex(256, 256, (g, w, h) => {
-          g.fillStyle = '#6fbf4a';
-          g.fillRect(0, 0, w, h);
-          for (let i = 0; i < 3000; i++) {
-            g.fillStyle = Math.random() < 0.5 ? '#63b041' : '#7bcc55';
-            g.fillRect(Math.random() * w, Math.random() * h, 3, 3);
-          }
-        }),
-      }),
-    );
-    ground.material.map.repeat.set(120, 120);
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
-    // Mountains + trees + clouds
-    for (let i = 0; i < 26; i++) {
-      const a = (i / 26) * Math.PI * 2;
-      const r = 700 + Math.random() * 200;
-      const h = 120 + Math.random() * 180;
-      const m = new THREE.Mesh(new THREE.ConeGeometry(h * 0.9, h, 6), new THREE.MeshLambertMaterial({ color: i % 2 ? '#7a8fa6' : '#8ea3b8' }));
-      m.position.set(c.x + Math.cos(a) * r, h / 2 - 5, c.z + Math.sin(a) * r);
-      scene.add(m);
+    buildDaylight(scene, theme, track);
+  }
+}
+
+const DAY_THEMES = {
+  toy: {
+    sky: '#8fd3ff', fog: ['#bfe6ff', 300, 1100], hemi: ['#e6f6ff', '#5b8a3a', 1.5], sun: ['#fff4e0', 2.4],
+    ground: ['#6fbf4a', '#63b041', '#7bcc55'], hills: ['#7a8fa6', '#8ea3b8'], clouds: 18,
+  },
+  desert: {
+    sky: '#ffc58f', fog: ['#ffd9b0', 320, 1200], hemi: ['#fff1dc', '#b07a45', 1.5], sun: ['#ffd8a8', 2.6],
+    ground: ['#e3b778', '#d6a865', '#edc88e'], hills: ['#c2623a', '#a94f2e'], clouds: 6,
+  },
+  volcano: {
+    sky: '#2a0f14', fog: ['#4a1a12', 220, 950], hemi: ['#ff9a6a', '#2a1010', 1.3], sun: ['#ffb07a', 1.9],
+    ground: ['#2b2224', '#221a1c', '#352a2b'], hills: ['#241a1b', '#301f1d'], clouds: 0,
+  },
+};
+
+function buildDaylight(scene, theme, track) {
+  const T = DAY_THEMES[theme] || DAY_THEMES.toy;
+  scene.background = new THREE.Color(T.sky);
+  scene.fog = new THREE.Fog(...T.fog);
+  scene.add(new THREE.HemisphereLight(...T.hemi));
+  const sun = new THREE.DirectionalLight(...T.sun);
+  sun.position.set(120, 220, 80);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  const sc = sun.shadow.camera;
+  sc.left = sc.bottom = -280;
+  sc.right = sc.top = 280;
+  sc.near = 10;
+  sc.far = 800;
+  sun.shadow.bias = -0.0008;
+  // Aim the shadow box at the middle of the track
+  const c = trackCenter(track);
+  sun.position.add(c);
+  sun.target.position.copy(c);
+  scene.add(sun, sun.target);
+
+  const groundTex = canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = T.ground[0];
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 3000; i++) {
+      g.fillStyle = Math.random() < 0.5 ? T.ground[1] : T.ground[2];
+      g.fillRect(Math.random() * w, Math.random() * h, 3, 3);
     }
+  });
+  groundTex.repeat.set(120, 120);
+  const groundMat = new THREE.MeshLambertMaterial({ map: groundTex });
+  if (theme === 'volcano') {
+    // Glowing lava cracks
+    const cracks = canvasTex(512, 512, (g, w, h) => {
+      g.fillStyle = '#000';
+      g.fillRect(0, 0, w, h);
+      g.strokeStyle = '#ff5a1f';
+      g.lineCap = 'round';
+      for (let i = 0; i < 26; i++) {
+        let x = Math.random() * w, y = Math.random() * h;
+        g.lineWidth = 1 + Math.random() * 3;
+        g.beginPath();
+        g.moveTo(x, y);
+        for (let k = 0; k < 8; k++) {
+          x += (Math.random() - 0.5) * 70;
+          y += (Math.random() - 0.5) * 70;
+          g.lineTo(x, y);
+        }
+        g.stroke();
+      }
+    });
+    cracks.repeat.set(30, 30);
+    groundMat.emissive = new THREE.Color('#ffffff');
+    groundMat.emissiveMap = cracks;
+  }
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Distant hills / mesas / volcanic peaks
+  for (let i = 0; i < 26; i++) {
+    const a = (i / 26) * Math.PI * 2;
+    const r = 720 + Math.random() * 220;
+    const h = 120 + Math.random() * 180;
+    const mat = new THREE.MeshLambertMaterial({ color: T.hills[i % 2] });
+    const geo = theme === 'desert'
+      ? new THREE.CylinderGeometry(h * 0.55, h * 0.75, h * 0.7, 7)
+      : new THREE.ConeGeometry(h * 0.9, h, 6);
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(c.x + Math.cos(a) * r, (theme === 'desert' ? h * 0.35 : h / 2) - 5, c.z + Math.sin(a) * r);
+    scene.add(m);
+  }
+
+  if (theme === 'toy') {
     const leaf = new THREE.MeshLambertMaterial({ color: '#2f7a34' });
     const trunk = new THREE.MeshLambertMaterial({ color: '#6b4a2b' });
     placeProps(track, 26, 140, 420, (x, z) => {
@@ -537,17 +588,80 @@ function buildEnvironment(scene, theme, track) {
       tr.position.set(x, 1.6, z);
       scene.add(tr);
     });
-    const cloudMat = new THREE.MeshLambertMaterial({ color: '#ffffff', transparent: true, opacity: 0.9 });
-    for (let i = 0; i < 18; i++) {
-      const g = new THREE.Group();
-      for (let j = 0; j < 4; j++) {
-        const b = new THREE.Mesh(new THREE.SphereGeometry(14 + Math.random() * 10, 10, 8), cloudMat);
-        b.position.set(j * 16 - 24, Math.random() * 6, Math.random() * 10);
-        g.add(b);
+  } else if (theme === 'desert') {
+    const cactus = new THREE.MeshLambertMaterial({ color: '#3f8f3a' });
+    const rock = new THREE.MeshLambertMaterial({ color: '#b5653a' });
+    placeProps(track, 40, 120, 440, (x, z) => {
+      if (Math.random() < 0.55) {
+        const h = 6 + Math.random() * 6;
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1, h, 8), cactus);
+        trunk.position.set(x, h / 2, z);
+        trunk.castShadow = true;
+        scene.add(trunk);
+        for (const side of [-1, 1]) {
+          if (Math.random() < 0.3) continue;
+          const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, h * 0.4, 8), cactus);
+          arm.position.set(x + side * 1.8, h * (0.45 + Math.random() * 0.2), z);
+          arm.castShadow = true;
+          scene.add(arm);
+        }
+      } else {
+        const s = 6 + Math.random() * 14;
+        const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rock);
+        m.position.set(x, s * 0.4, z);
+        m.scale.y = 0.5 + Math.random() * 0.6;
+        m.rotation.y = Math.random() * 3;
+        m.castShadow = true;
+        scene.add(m);
       }
-      g.position.set(c.x + (Math.random() - 0.5) * 1200, 140 + Math.random() * 80, c.z + (Math.random() - 0.5) * 1200);
-      scene.add(g);
+    });
+  } else if (theme === 'volcano') {
+    const rock = new THREE.MeshLambertMaterial({ color: '#2d2224' });
+    const glow = new THREE.MeshBasicMaterial({ color: '#ff5a1f' });
+    const v = track.marks.volcano;
+    if (v) {
+      // The helix wraps around this cone
+      const base = v.r - track.hw - 6, h = 78;
+      const cone = new THREE.Mesh(new THREE.CylinderGeometry(9, base, h, 20, 1, true), rock);
+      cone.position.set(v.x, h / 2, v.z);
+      cone.castShadow = true;
+      scene.add(cone);
+      const lava = new THREE.Mesh(new THREE.CircleGeometry(9, 20), glow);
+      lava.rotation.x = -Math.PI / 2;
+      lava.position.set(v.x, h - 2, v.z);
+      scene.add(lava);
+      const light = new THREE.PointLight('#ff6a2a', 3, 200, 1.2);
+      light.position.set(v.x, h + 10, v.z);
+      scene.add(light);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + Math.random();
+        const stream = new THREE.Mesh(new THREE.PlaneGeometry(2.2, h * 0.75), glow);
+        const rr = (base + 9) / 2 + 0.5;
+        stream.position.set(v.x + Math.cos(a) * rr, h * 0.55, v.z + Math.sin(a) * rr);
+        stream.lookAt(v.x + Math.cos(a) * rr * 3, h * 0.55 + 20, v.z + Math.sin(a) * rr * 3);
+        scene.add(stream);
+      }
+      track.smokeAt = new THREE.Vector3(v.x, h, v.z);
     }
+    placeProps(track, 34, 120, 440, (x, z) => {
+      const h = 10 + Math.random() * 30;
+      const m = new THREE.Mesh(new THREE.ConeGeometry(3 + Math.random() * 5, h, 5), rock);
+      m.position.set(x, h / 2, z);
+      m.castShadow = true;
+      scene.add(m);
+    });
+  }
+
+  const cloudMat = new THREE.MeshLambertMaterial({ color: '#ffffff', transparent: true, opacity: 0.9 });
+  for (let i = 0; i < T.clouds; i++) {
+    const g = new THREE.Group();
+    for (let j = 0; j < 4; j++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(14 + Math.random() * 10, 10, 8), cloudMat);
+      b.position.set(j * 16 - 24, Math.random() * 6, Math.random() * 10);
+      g.add(b);
+    }
+    g.position.set(c.x + (Math.random() - 0.5) * 1200, 150 + Math.random() * 80, c.z + (Math.random() - 0.5) * 1200);
+    scene.add(g);
   }
 }
 

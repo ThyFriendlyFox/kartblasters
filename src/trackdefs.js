@@ -8,7 +8,9 @@ const UP = new THREE.Vector3(0, 1, 0);
  * each point carries extra per-point data (roll, jump gap, boost pad, color).
  */
 export class TrackTurtle {
-  constructor(x, y, z, yaw = 0) {
+  constructor(x, y, z, yaw = 0, width = 15) {
+    this.width = width;
+    this.marks = {};
     this.pos = new THREE.Vector3(x, y, z);
     this.yaw = yaw;
     this.start = { pos: this.pos.clone(), yaw };
@@ -70,6 +72,7 @@ export class TrackTurtle {
     const a = THREE.MathUtils.degToRad(deg);
     const side = Math.sign(a);
     const center = this.pos.clone().addScaledVector(this.right(), -side * radius);
+    this.lastCenter = { x: center.x, z: center.z, r: radius };
     const off0 = this.pos.clone().sub(center);
     const y0 = this.pos.y, yaw0 = this.yaw;
     const n = Math.max(2, Math.ceil((Math.abs(a) * radius) / STEP));
@@ -84,8 +87,12 @@ export class TrackTurtle {
     return this;
   }
 
-  /** Vertical loop, shifted sideways by `side` so the exit clears the entry. */
-  loop(radius, side = 8) {
+  /**
+   * Vertical loop. The exit is shifted sideways by more than the road width
+   * (dir = +1 right, -1 left) so the two ends never overlap.
+   */
+  loop(radius, dir = 1) {
+    const side = dir * (this.width + 6);
     const p0 = this.pos.clone(), d = this.dir(), r = this.right();
     const n = Math.ceil((Math.PI * 2 * radius) / STEP);
     for (let i = 1; i <= n; i++) {
@@ -147,17 +154,17 @@ export const TRACKS = {
     theme: 'toy',
     width: 15,
     build() {
-      const t = new TrackTurtle(0, 4, 0, 0).paint('#ff7a00');
+      const t = new TrackTurtle(0, 4, 0, 0, this.width).paint('#ff7a00');
       t.straight(40).boost(12).straight(24);
       t.turn(-90, 38, 4);
       t.straight(36, 8);
-      t.paint('#1e90ff').loop(16, 10).paint('#ff7a00');
+      t.paint('#1e90ff').loop(24, 1).paint('#ff7a00');
       t.straight(30, -4);
       t.paint('#39d353').turn(-360, 30, 20).paint('#ff7a00');
-      t.turn(-90, 34);
+      t.turn(-90, 46);
       t.straight(50, -16);
-      t.straight(16, 2.5).gap(22, -3).straight(24, -2);
-      t.turn(-90, 40, -6).boost(12).straight(46);
+      t.boost(12).straight(16, 2.5).gap(22, -3).straight(24, -2);
+      t.turn(-90, 40, -6).boost(12).straight(58);
       t.turn(-90, 40, -3);
       t.straight(20);
       return t.close();
@@ -169,14 +176,14 @@ export const TRACKS = {
     theme: 'neon',
     width: 16,
     build() {
-      const t = new TrackTurtle(0, 26, 0, 0).paint('#1f4bff');
+      const t = new TrackTurtle(0, 26, 0, 0, this.width).paint('#1f4bff');
       t.straight(36).boost(12).straight(20);
       t.turn(55, 55).turn(-55, 55);
       t.paint('#b400ff').corkscrew(90, 1).paint('#1f4bff');
       t.straight(20);
       t.turn(-120, 38, -8);
-      t.straight(20).straight(14, 2.5).gap(26, -4).straight(26);
-      t.paint('#00d2ff').loop(18, -11).paint('#1f4bff');
+      t.straight(8).boost(12).straight(14, 2.5).gap(26, -4).straight(26);
+      t.paint('#00d2ff').loop(28, -1).paint('#1f4bff');
       t.straight(80);
       t.paint('#ff2bd6').straight(30, 6).straight(30, -6).straight(30, 6).straight(30, -6).paint('#1f4bff');
       t.straight(66);
@@ -187,6 +194,52 @@ export const TRACKS = {
       t.straight(40, -8).boost(12).straight(76);
       t.turn(-120, 48);
       t.straight(10);
+      return t.close();
+    },
+  },
+  canyon: {
+    name: 'Mega Loop Canyon',
+    desc: 'Desert stunt run: giant loop, double loop, big jump',
+    theme: 'desert',
+    width: 15,
+    build() {
+      const t = new TrackTurtle(0, 8, 0, 0, this.width).paint('#ffd000');
+      t.straight(40).boost(14).straight(30);
+      t.paint('#ff3b3b').loop(36, 1).paint('#ffd000');
+      t.straight(40);
+      t.turn(-90, 45, 6);
+      t.straight(40).boost(12).straight(10);
+      t.paint('#ff7a00').loop(24, 1).straight(12).loop(24, 1).paint('#ffd000');
+      t.straight(30);
+      t.turn(-90, 42, -4);
+      t.straight(18).boost(12).straight(16, 3).gap(26, -6).straight(34, -2);
+      t.turn(-90, 42);
+      t.straight(128);
+      t.turn(-90, 42, -2);
+      return t.close();
+    },
+  },
+  volcano: {
+    name: 'Volcano Spiral',
+    desc: 'Climb a double helix round a volcano, then drop into a mega loop',
+    theme: 'volcano',
+    width: 15,
+    build() {
+      const t = new TrackTurtle(0, 4, 0, 0, this.width).paint('#ff7a00');
+      t.straight(40).boost(12).straight(20);
+      t.turn(-90, 40);
+      t.straight(30);
+      t.paint('#39d353').turn(-720, 48, 52).paint('#ff7a00');
+      t.marks.volcano = { ...t.lastCenter };
+      t.straight(30);
+      t.straight(90, -48).boost(14);
+      t.paint('#1e90ff').loop(38, 1).paint('#ff7a00');
+      t.straight(40);
+      t.turn(-90, 42);
+      t.straight(8).boost(12).straight(16, 3).gap(26, -5).straight(32, -2);
+      t.turn(-90, 42);
+      t.boost(12).straight(190);
+      t.turn(-90, 42);
       return t.close();
     },
   },
