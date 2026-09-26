@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildMountain } from './mountain.js';
 import { TRACKS, TrackTurtle } from './trackdefs.js';
 
 const DS = 1; // physics sample spacing along the track (world units)
@@ -14,7 +15,7 @@ function wrapAngle(a) {
  * The main circuit is a closed Path; alternate routes are open Paths.
  */
 export class Path {
-  constructor(pts, { closed = true, hw = 7.5, N0 = null, N1 = null, level = [] } = {}) {
+  constructor(pts, { closed = true, hw = 7.5, N0 = null, N1 = null, level = [], flat = false } = {}) {
     this.closed = closed;
     this.hw = hw;
     const curve = new THREE.CatmullRomCurve3(pts.map((p) => p.p), closed, 'centripetal');
@@ -149,6 +150,41 @@ export class Path {
         twistAt[i] += (need * acc) / tot;
         acc += w[i];
       }
+    }
+
+    // Flat circuits (the long tracks): outside stunts the road is kept
+    // level; loops and corkscrews carry the correction smoothly from their
+    // entry to their exit, so no twist is left over for the straights.
+    if (flat && closed) {
+      // Corkscrews are targets too (their tube's axis); loops are blended
+      const stunt = (i) => !upAt[i] && Math.abs(T[i * 3 + 1]) > 0.55;
+      const c = new Float64Array(n + 1);
+      const ok = new Uint8Array(n + 1);
+      const up = new THREE.Vector3(), nv = new THREE.Vector3(), cr = new THREE.Vector3();
+      let prev = 0;
+      for (let i = 0; i < n; i++) {
+        if (stunt(i)) continue;
+        Ti.fromArray(T, i * 3);
+        if (upAt[i]) up.copy(upAt[i]).addScaledVector(Ti, -upAt[i].dot(Ti)).normalize();
+        else up.set(0, 1, 0).addScaledVector(Ti, -Ti.y).normalize();
+        nv.copy(Nt[i]).applyAxisAngle(Ti, twistAt[i] - corr[i] + roll[i]);
+        const raw = Math.atan2(cr.crossVectors(nv, up).dot(Ti), nv.dot(up));
+        c[i] = prev + wrapAngle(raw - prev);
+        prev = c[i];
+        ok[i] = 1;
+      }
+      // (Laps start and end on the level start straight, so the seam needs no blend)
+      const first = ok.indexOf(1);
+      c[n] = prev;
+      ok[n] = 1;
+      let last = first;
+      for (let i = first + 1; i <= n; i++) {
+        if (!ok[i]) continue;
+        for (let j = last + 1; j < i; j++) c[j] = c[last] + ((c[i] - c[last]) * (j - last)) / (i - last);
+        last = i;
+      }
+      for (let j = 0; j < first; j++) c[j] = c[first];
+      for (let i = 0; i < n; i++) twistAt[i] += c[i] - corr[i];
     }
 
     // Around each fork and join the main road is brought level (no lean and
@@ -467,13 +503,24 @@ export class Path {
       N.fromArray(this.N, i * 3);
       if (N.y < 0.85 || P.y < 1.5) continue;
       const top = P.clone().addScaledVector(N, -0.6);
-      const h = top.y;
+      const g = this.groundY ? this.groundY(top.x, top.z) : 0;
+      const h = top.y - g;
+      if (h < 1.5) continue; // resting on the mountain
+      // Skip poles that would come down through a lower stretch of road
+      let blocked = false;
+      for (let j = 0; j < n && !blocked; j += 2) {
+        const py = this.P[j * 3 + 1];
+        if (py > top.y - 3) continue;
+        const dx = this.P[j * 3] - top.x, dz = this.P[j * 3 + 2] - top.z;
+        blocked = dx * dx + dz * dz < (this.hw + 2) ** 2;
+      }
+      if (blocked) continue;
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.6, h, 10), standMat);
-      pole.position.set(top.x, h / 2, top.z);
+      pole.position.set(top.x, g + h / 2, top.z);
       pole.castShadow = true;
       scene.add(pole);
       const foot = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.8, 0.4, 16), neon ? glowMat : standMat);
-      foot.position.set(top.x, 0.2, top.z);
+      foot.position.set(top.x, g + 0.2, top.z);
       scene.add(foot);
     }
   }
@@ -496,7 +543,7 @@ export class Track extends Path {
       { pos: turtle.marks[bd.from].pos, before: 10, after: 130 },
       { pos: turtle.marks[bd.to].pos, before: 130, after: 10 },
     ]);
-    super(turtle.pts, { closed: true, hw: def.width / 2, level });
+    super(turtle.pts, { closed: true, hw: def.width / 2, level, flat: !!def.flat });
     this.def = def;
     this.id = TRACKS[id] ? id : 'orange';
     this.marks = turtle.marks || {};
@@ -551,6 +598,7 @@ export class Track extends Path {
       this.branches.push(br);
     });
     for (const k of def.keys || []) this.keys.push({ id: k.id, s: markS(k.at), d: k.d || 0 });
+    if (def.mountain) this.mountainS = [markS(def.mountain.from), markS(def.mountain.to)];
   }
 
   /**
@@ -646,8 +694,23 @@ export class Track extends Path {
     return car.lap * this.L + s;
   }
 
+  /** On big tracks, keep the sun's shadow box centred on the player. */
+  followShadow(p) {
+    if (!this.sun) return;
+    const t = this.sun.target.position;
+    if (Math.abs(t.x - p.x) + Math.abs(t.z - p.z) < 40) return;
+    this.sun.position.set(p.x + 120, p.y + 220, p.z + 80);
+    t.set(p.x, p.y, p.z);
+  }
+
+  /** Height of the ground (0 off the mountain). */
+  groundY(x, z) {
+    return this.mountain ? this.mountain.groundY(x, z) : 0;
+  }
+
   build(scene) {
     const theme = this.def.theme;
+    if (this.mountainS) this.mountain = buildMountain(scene, this, { ...this.def.mountain, s0: this.mountainS[0], s1: this.mountainS[1], palette: theme });
     buildEnvironment(scene, theme, this);
     this.buildRoad(scene, theme, { startLine: true });
     for (const br of this.branches) br.path.buildRoad(scene, theme, { beneath: true });
@@ -1076,6 +1139,30 @@ function buildEnvironment(scene, theme, track) {
         }
       }
     });
+    const tw = track.marks.tower;
+    if (tw) {
+      // The skyscraper the spiral climbs: lit windows, a glowing band at each lap
+      const r = tw.r - track.hw - 7, h = tw.top + 36;
+      const tex = winTex.clone();
+      tex.needsUpdate = true;
+      tex.repeat.set((2 * Math.PI * r) / 16, h / 30);
+      const tower = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.04, h, 32), new THREE.MeshBasicMaterial({ map: tex }));
+      tower.position.set(tw.x, h / 2, tw.z);
+      scene.add(tower);
+      const bandMat = new THREE.MeshBasicMaterial({ color: '#00e5ff' });
+      for (let y = 30; y < h; y += 40) {
+        const band = new THREE.Mesh(new THREE.TorusGeometry(r + 0.4, 0.5, 6, 48), bandMat);
+        band.rotation.x = Math.PI / 2;
+        band.position.set(tw.x, y, tw.z);
+        scene.add(band);
+      }
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.3, r * 0.9, 18, 32), new THREE.MeshBasicMaterial({ color: '#ff2bd6' }));
+      crown.position.set(tw.x, h + 9, tw.z);
+      scene.add(crown);
+      const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1.2, 40, 8), new THREE.MeshBasicMaterial({ color: '#ffe600' }));
+      spire.position.set(tw.x, h + 38, tw.z);
+      scene.add(spire);
+    }
     placeProps(track, 90, 24 + track.hw + 6, 700, (x, z) => {
       const h = 40 + Math.random() * 160, w = 14 + Math.random() * 20;
       const t = winTex.clone();
@@ -1094,6 +1181,10 @@ function buildEnvironment(scene, theme, track) {
 }
 
 const DAY_THEMES = {
+  alpine: {
+    sky: '#9fd3ff', fog: ['#d6ecff', 450, 1800], hemi: ['#eef7ff', '#5f7d4c', 1.5], sun: ['#fff4e2', 2.4],
+    ground: ['#5f9e4a', '#57953f', '#6aab54'], hills: ['#8d99a8', '#a3aebb'], clouds: 16,
+  },
   toy: {
     sky: '#8fd3ff', fog: ['#bfe6ff', 300, 1100], hemi: ['#e6f6ff', '#5b8a3a', 1.5], sun: ['#fff4e0', 2.4],
     ground: ['#6fbf4a', '#63b041', '#7bcc55'], hills: ['#7a8fa6', '#8ea3b8'], clouds: 18,
@@ -1128,6 +1219,8 @@ function buildDaylight(scene, theme, track) {
   sun.position.add(c);
   sun.target.position.copy(c);
   scene.add(sun, sun.target);
+  // Big tracks: the shadow box follows the player instead (see followShadow)
+  if (trackExtent(track) > 330) track.sun = sun;
 
   const groundTex = canvasTex(256, 256, (g, w, h) => {
     g.fillStyle = T.ground[0];
@@ -1163,7 +1256,11 @@ function buildDaylight(scene, theme, track) {
     groundMat.emissive = new THREE.Color('#ffffff');
     groundMat.emissiveMap = cracks;
   }
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), groundMat);
+  const ext = trackExtent(track);
+  const groundSize = Math.max(3000, ext * 2 + 1800);
+  groundTex.repeat.set((120 * groundSize) / 3000, (120 * groundSize) / 3000);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(groundSize, groundSize), groundMat);
+  ground.position.set(c.x, 0, c.z);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);
@@ -1171,8 +1268,8 @@ function buildDaylight(scene, theme, track) {
   // Distant hills / mesas / volcanic peaks
   for (let i = 0; i < 26; i++) {
     const a = (i / 26) * Math.PI * 2;
-    const r = 720 + Math.random() * 220;
-    const h = 120 + Math.random() * 180;
+    const r = Math.max(720, ext + 420) + Math.random() * 220;
+    const h = (120 + Math.random() * 180) * (theme === 'alpine' ? 1.3 : 1) * Math.max(1, Math.sqrt(ext / 500));
     const mat = new THREE.MeshLambertMaterial({ color: T.hills[i % 2] });
     const geo = theme === 'desert'
       ? new THREE.CylinderGeometry(h * 0.55, h * 0.75, h * 0.7, 7)
@@ -1180,9 +1277,39 @@ function buildDaylight(scene, theme, track) {
     const m = new THREE.Mesh(geo, mat);
     m.position.set(c.x + Math.cos(a) * r, (theme === 'desert' ? h * 0.35 : h / 2) - 5, c.z + Math.sin(a) * r);
     scene.add(m);
+    if (theme === 'alpine') {
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(h * 0.9 * 0.36, h * 0.4, 6), new THREE.MeshLambertMaterial({ color: '#f7fafd' }));
+      cap.position.set(m.position.x, m.position.y + h * 0.3 + 0.5, m.position.z);
+      scene.add(cap);
+    }
   }
 
-  if (theme === 'toy') {
+  if (theme === 'alpine') {
+    // Pines (three tiers) and boulders, instanced so a big map stays cheap to draw
+    const trees = [], rocks = [];
+    placeProps(track, 40, 49, 420, (x, z) => (Math.random() < 0.25 ? rocks : trees).push([x, z, Math.random()]));
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3();
+    const inst = (geo, color, n) => {
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color }), Math.max(1, n));
+      im.count = n;
+      im.castShadow = true;
+      scene.add(im);
+      return im;
+    };
+    const tiers = [0, 1, 2].map(() => inst(new THREE.ConeGeometry(1, 1.6, 8), '#2b6b3a', trees.length));
+    const trunk = inst(new THREE.CylinderGeometry(0.6, 0.9, 3.2), '#5b3e26', trees.length);
+    trees.forEach(([x, z, r], i) => {
+      const s = 4 + r * 4;
+      tiers.forEach((t, k) => t.setMatrixAt(i, m.compose(p.set(x, 3 + s * 0.8 + k * s * 0.9, z), q, sc.set(s * (1 - k * 0.22), s, s * (1 - k * 0.22)))));
+      trunk.setMatrixAt(i, m.compose(p.set(x, 1.6, z), q, sc.set(1, 1, 1)));
+    });
+    const boulders = inst(new THREE.DodecahedronGeometry(1, 0), '#8a8d94', rocks.length);
+    rocks.forEach(([x, z, r], i) => {
+      const s = 3 + r * 6;
+      boulders.setMatrixAt(i, m.compose(p.set(x, s * 0.35, z), q.setFromEuler(new THREE.Euler(0, r * 6, 0)), sc.set(s, s * 0.6, s)));
+    });
+    q.identity();
+  } else if (theme === 'toy') {
     const leaf = new THREE.MeshLambertMaterial({ color: '#2f7a34' });
     const trunk = new THREE.MeshLambertMaterial({ color: '#6b4a2b' });
     placeProps(track, 26, 49, 420, (x, z) => {
@@ -1267,9 +1394,19 @@ function buildDaylight(scene, theme, track) {
       b.position.set(j * 16 - 24, Math.random() * 6, Math.random() * 10);
       g.add(b);
     }
-    g.position.set(c.x + (Math.random() - 0.5) * 1200, 150 + Math.random() * 80, c.z + (Math.random() - 0.5) * 1200);
+    const spread = Math.max(1200, trackExtent(track) * 2.2);
+    g.position.set(c.x + (Math.random() - 0.5) * spread, 150 + Math.random() * 80 + (theme === 'alpine' ? 60 : 0), c.z + (Math.random() - 0.5) * spread);
+    g.userData.cloud = true;
     scene.add(g);
   }
+}
+
+/** Half the size of the track's footprint (for sizing scenery). */
+function trackExtent(track) {
+  let r = 0;
+  const c = trackCenter(track);
+  for (let i = 0; i < track.n; i += 8) r = Math.max(r, Math.hypot(track.P[i * 3] - c.x, track.P[i * 3 + 2] - c.z));
+  return r;
 }
 
 function trackCenter(track) {
@@ -1284,13 +1421,20 @@ function trackCenter(track) {
  */
 function placeProps(track, count, clear, spread, place) {
   const c = trackCenter(track);
+  const need = trackExtent(track) + 200;
+  if (need > spread) {
+    count = Math.round(count * Math.min(3, (need / spread) ** 2));
+    spread = need;
+  }
   const paths = [track, ...(track.branches || []).map((b) => b.path)];
   let tries = 0, placed = 0;
   while (placed < count && tries++ < count * 30) {
     const x = c.x + (Math.random() - 0.5) * spread * 2;
     const z = c.z + (Math.random() - 0.5) * spread * 2;
-    let ok = true;
-    for (const p of paths) {
+    let ok = !(track.groundY && track.groundY(x, z) > 0.5);
+    const tw = track.marks?.tower;
+    if (tw && Math.hypot(x - tw.x, z - tw.z) < tw.r + 30) ok = false;
+    for (const p of ok ? paths : []) {
       for (let i = 0; ok && i < p.n; i += 2) {
         const dx = p.P[i * 3] - x, dz = p.P[i * 3 + 2] - z;
         if (dx * dx + dz * dz < clear * clear) ok = false;

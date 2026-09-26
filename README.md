@@ -9,6 +9,8 @@ Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no ga
 
 ## Cars
 
+The menu (and the battle pause screen) shows each car's Acceleration, Top Speed, Boost Power, Grip and Health as bars.
+
 | Car | Style |
 | --- | --- |
 | Hyper | Balanced wedge-shaped supercar |
@@ -24,6 +26,8 @@ Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no ga
 
 ## Maps
 
+The menu shows an aerial preview of the selected map with its lap length and a rough lap time. The three epic tracks take about two minutes a lap, so a 1-lap race is already a proper outing.
+
 | Map | Mode | Features |
 | --- | --- | --- |
 | Orange Loop | Race | Classic orange plastic track on stands: loop, green helix, jump |
@@ -32,6 +36,9 @@ Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no ga
 | Volcano Spiral | Race | Double helix climbing round a volcano, steep drop into a mega loop |
 | Twin Peaks | Race | Two routes (low road or the High Road jump) plus a key-locked corkscrew shortcut |
 | Neon Junction | Race | Split-level sky highway (upper waves or Lower Deck) plus a key-locked Express lane |
+| Summit Rush | Race (epic, ~2 min lap) | Switchbacks up a snowy mountain, a leap off the summit and a plunge down the far side, plus loops, a corkscrew and a spiral flyover |
+| Canyon Colossus | Race (epic, ~2 min lap) | Three giant loops, a gorge jump, a climb onto a sandstone mesa and a huge leap off its edge, a double corkscrew |
+| Skyline Spiral | Race (epic, ~2 min lap) | Rooftop jumps, 3½ laps spiralling up a neon skyscraper, a dive off the top, double loop and double corkscrew |
 | Stadium | Battle | Walled arena with cover, jump pads, rocket/health/boost pickups |
 | Crater Field | Battle | Rolling hills with brick forts and stone pillars |
 

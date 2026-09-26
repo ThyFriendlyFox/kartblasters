@@ -4,8 +4,9 @@ import { Game, COLORS } from './game.js';
 import { RaceGame } from './race.js';
 import { Sfx } from './audio.js';
 import { isTouchDevice, requestMotionPermission, enterLandscape, MobileInput } from './mobile.js';
-import { CARS, CAR_IDS, carThumbnail } from './cars.js';
+import { CARS, CAR_IDS, carThumbnail, statBarsHTML } from './cars.js';
 import { TRACKS, TRACK_IDS } from './trackdefs.js';
+import { mapPreview } from './preview.js';
 
 // Initialize Vercel Analytics
 inject();
@@ -57,6 +58,7 @@ for (const id of CAR_IDS) {
   carBtns[id] = b;
 }
 function refreshCars(redraw = false) {
+  $('carStats').innerHTML = `<b>${CARS[car].name}</b>${statBarsHTML(car)}`;
   for (const id of CAR_IDS) {
     carBtns[id].classList.toggle('on', id === car);
     if (redraw) {
@@ -89,11 +91,31 @@ function refreshMode() {
   for (const b of $('modeSeg').children) b.classList.toggle('on', b.dataset.mode === mode);
   const prev = store.get(`kb-map-${mode}`, MAPS[mode][0][0]);
   $('map').innerHTML = MAPS[mode].map(([id, label]) => `<option value="${id}"${id === prev ? ' selected' : ''}>${label}</option>`).join('');
+  showPreview();
   $('lapsWrap').classList.toggle('hidden', mode !== 'race');
   $('destructWrap').classList.toggle('hidden', mode !== 'battle');
   $('ctlRace').classList.toggle('hidden', mode !== 'race');
   $('ctlBattle').classList.toggle('hidden', mode !== 'battle');
 }
+// Aerial shot of the selected map, rendered from the real map on demand
+function showPreview() {
+  const wrap = $('mapPreview'), id = $('map').value, key = `${mode}:${id}`;
+  wrap.dataset.key = key;
+  wrap.classList.add('loading');
+  mapPreview(mode, id)
+    .then(({ url, facts }) => {
+      if (wrap.dataset.key !== key) return;
+      wrap.querySelector('.shot').style.backgroundImage = `url(${url})`;
+      wrap.querySelector('.facts').textContent = facts.join(' · ');
+      wrap.classList.remove('loading');
+    })
+    .catch((e) => {
+      console.warn('map preview failed', e);
+      if (wrap.dataset.key === key) wrap.classList.add('hidden');
+    });
+}
+$('map').addEventListener('change', showPreview);
+
 for (const b of $('modeSeg').children) {
   b.onclick = () => {
     mode = b.dataset.mode;

@@ -229,6 +229,38 @@ export class TrackTurtle {
   }
 }
 
+/**
+ * Build a long circuit that closes on its own: `build(a, b)` makes the whole
+ * lap (not yet closed) where `a` and `b` are the lengths of two plain
+ * straights on different headings. The end point is linear in a and b, so
+ * two extra trial builds give the exact lengths that bring the lap back to
+ * `back` units behind the start line, heading the same way.
+ */
+export function solveCircuit(build, back = 70) {
+  const probe = (a, b) => {
+    const t = build(a, b);
+    const d0 = new THREE.Vector3(Math.sin(t.start.yaw), 0, Math.cos(t.start.yaw));
+    const r0 = new THREE.Vector3(-d0.z, 0, d0.x);
+    const rel = t.pos.clone().sub(t.start.pos);
+    return [rel.dot(d0), rel.dot(r0), t];
+  };
+  const A = 150, B = 150;
+  if (globalThis.TRACK_DEBUG) return build(A, B); // layout tools: show the unsolved lap
+  const [f0, l0, t0] = probe(A, B), [fa, la] = probe(A + 1, B), [fb, lb] = probe(A, B + 1);
+  const turn = Math.atan2(Math.sin(t0.yaw - t0.start.yaw), Math.cos(t0.yaw - t0.start.yaw));
+  if (Math.abs(turn) > 1e-6) throw new Error(`solveCircuit: lap turns ${THREE.MathUtils.radToDeg(turn).toFixed(1)} deg short of a full circle`);
+  const m00 = fa - f0, m01 = fb - f0, m10 = la - l0, m11 = lb - l0;
+  const det = m00 * m11 - m01 * m10;
+  if (Math.abs(det) < 1e-6) throw new Error('solveCircuit: legs a and b run the same way');
+  const rf = -back - f0, rl = -l0;
+  const a = A + (rf * m11 - m01 * rl) / det, b = B + (m00 * rl - m10 * rf) / det;
+  if (a < 10 || b < 10) throw new Error(`solveCircuit: legs came out a=${a.toFixed(0)} b=${b.toFixed(0)}`);
+  const t = build(a, b);
+  if (Math.abs(t.pos.y - t.start.pos.y) > 0.5) throw new Error(`solveCircuit: lap ends ${(t.pos.y - t.start.pos.y).toFixed(1)} off the start height`);
+  t.legs = { a, b };
+  return t.close();
+}
+
 // Leg lengths chosen so each circuit closes back on its start line
 const LEG = { twin2: 60, twin3: 176, twin4: 186, junc2: 60, junc3: 118, junc4: 170 };
 
@@ -411,6 +443,134 @@ export const TRACKS = {
       },
     ],
     keys: [{ id: 'k1', at: 'k1', d: -5 }],
+  },
+  summit: {
+    name: 'Summit Rush',
+    desc: 'Epic: switchbacks to a mountain top, then fly down the far side',
+    theme: 'alpine',
+    width: 16,
+    flat: true,
+    mountain: { from: 'm0', to: 'm1', slope: 1.0 },
+    build() {
+      return solveCircuit((a, b) => {
+        const t = new TrackTurtle(0, 3, 0, 0, this.width).paint('#ff7a00');
+        t.straight(40).boost(14).straight(a);
+        // Valley: giant loop and a kicker
+        t.turn(-90, 80);
+        t.straight(60).paint('#1e90ff').loop(40, 1).paint('#ff7a00').straight(60);
+        t.paint('#39d353').straight(40, 8).straight(40, -8).straight(40, 8).straight(40, -8).paint('#ff7a00').straight(30);
+        t.paint('#ffd000').ramp(16, 2).gap(42, -2).paint('#ff7a00').straight(70);
+        t.turn(90, 80);
+        t.straight(40).paint('#ffd000').ramp(16, 2).gap(46, -2).paint('#ff7a00').straight(60);
+        // The mountain: four switchback legs up the south face
+        t.mark('m0').turn(90, 50, 4);
+        t.straight(260, 28).turn(-180, 32, 6);
+        t.straight(260, 28).turn(180, 32, 6);
+        t.straight(260, 28).turn(-180, 32, 6);
+        t.straight(260, 28).turn(90, 45, 4);
+        t.straight(30).boost(12).straight(20);
+        // Over the top and down the north face, with a big jump off the crest
+        t.straight(70, -10);
+        t.paint('#ffd000').ramp(16, 2).gap(62, -24).paint('#ff7a00');
+        t.straight(240, -65).straight(180, -38).mark('m1');
+        t.turn(-180, 100, -3);
+        // Home run: corkscrew, rollers, mega loop, jump, sweepers
+        t.straight(80).boost(14).straight(100).paint('#b400ff').corkscrew(90, 1).paint('#ff7a00');
+        // Spiral flyover: a full turn that crosses over itself
+        t.straight(60).paint('#ff2bd6').turn(180, 62, 8).turn(180, 76, 8).paint('#ff7a00').straight(90, -16);
+        t.straight(60).paint('#39d353').straight(40, 9).straight(40, -9).straight(40, 9).straight(40, -9).paint('#ff7a00');
+        t.straight(80).paint('#1e90ff').loop(48, -1).paint('#ff7a00');
+        t.straight(90).paint('#ffd000').ramp(16, 2).gap(50, -2).paint('#ff7a00');
+        t.straight(120).turn(30, 220).turn(-60, 220).turn(30, 220).straight(150);
+        t.turn(-90, 70).straight(60).paint('#ffd000').ramp(16, 2).gap(48, -2).paint('#ff7a00');
+        t.straight(b).boost(14).straight(80).turn(-90, 70);
+        return t;
+      });
+    },
+  },
+  colossus: {
+    name: 'Canyon Colossus',
+    desc: 'Epic: giant loops, a leap off a mesa and a double corkscrew',
+    theme: 'desert',
+    width: 16,
+    flat: true,
+    mountain: { from: 'm0', to: 'm1', slope: 2.4, shoulder: 26 },
+    build() {
+      return solveCircuit((a, b) => {
+        const t = new TrackTurtle(0, 3, 0, 0, this.width).paint('#ff7a00');
+        t.straight(40).boost(14).straight(a);
+        // North: rollers and a double loop, then a long canyon sweeper
+        t.paint('#ffd000').straight(40, 10).straight(40, -10).straight(40, 10).straight(40, -10).paint('#ff7a00');
+        t.straight(60).paint('#1e90ff').loop(44, 1).paint('#ff7a00').straight(24).paint('#39d353').loop(44, 1).paint('#ff7a00');
+        t.straight(60).turn(25, 300).turn(-50, 300).turn(25, 300).straight(80);
+        t.paint('#ff2bd6').loop(50, -1).paint('#ff7a00').straight(80);
+        t.turn(-90, 110);
+        // East: the giant loop and a gorge jump
+        t.straight(100).paint('#e11d48').loop(58, 1).paint('#ff7a00').straight(80);
+        t.paint('#ffd000').ramp(18, 2.5).gap(62, -4).paint('#ff7a00').straight(120);
+        t.turn(-40, 160).turn(40, 160).straight(60);
+        t.turn(-90, 110);
+        // South: up onto the mesa, across the top, and off the edge
+        t.straight(60).mark('m0');
+        t.straight(340, 58);
+        t.turn(35, 150).turn(-70, 150).turn(35, 150);
+        t.boost(14).straight(100);
+        t.paint('#ffd000').ramp(18, 3).gap(96, -54).paint('#ff7a00');
+        t.straight(160, -6).mark('m1');
+        t.straight(40).paint('#b400ff').corkscrew(150, 2).paint('#ff7a00');
+        t.straight(120, 0.5);
+        t.turn(-90, 110);
+        // West: home straight with a last kicker
+        t.straight(80).paint('#ffd000').ramp(16, 2).gap(50, -2).paint('#ff7a00');
+        t.straight(b).paint('#39d353').straight(40, 9).straight(40, -9).straight(40, 9).straight(40, -9).paint('#ff7a00');
+        // Spiral flyover
+        t.straight(40).paint('#1e90ff').turn(180, 62, 8).turn(180, 76, 8).paint('#ff7a00').straight(90, -16);
+        t.boost(14).straight(60);
+        t.turn(-90, 110);
+        return t;
+      });
+    },
+  },
+  skyline: {
+    name: 'Skyline Spiral',
+    desc: 'Epic: spiral up a skyscraper, dive off the top, loop the loops',
+    theme: 'neon',
+    width: 16,
+    flat: true,
+    build() {
+      return solveCircuit((a, b) => {
+        const t = new TrackTurtle(0, 26, 0, 0, this.width).paint('#1f4bff');
+        t.straight(40).boost(14).straight(a);
+        // North: neon waves and a giant loop
+        t.paint('#ff2bd6').straight(40, 8).straight(40, -8).straight(40, 8).straight(40, -8).paint('#1f4bff');
+        t.straight(60).paint('#00d2ff').loop(56, -1).paint('#1f4bff').straight(60);
+        t.turn(-90, 90);
+        // East: rooftop jumps
+        t.straight(80).paint('#ffe600').ramp(16, 2).gap(56, -2).paint('#1f4bff').straight(90);
+        t.paint('#ffe600').ramp(16, 2).gap(56, -2).paint('#1f4bff').straight(120);
+        t.straight(60, 6).straight(60, -6).straight(60);
+        t.paint('#ffe600').ramp(16, 2).gap(60, -2).paint('#1f4bff').straight(124);
+        t.turn(-30, 130).turn(60, 130).turn(-30, 130).straight(80);
+        // The tower: three and a half turns up the outside of a skyscraper
+        t.paint('#00d2ff').turn(-1260, 74, 140).paint('#1f4bff');
+        t.marks.tower = { x: t.lastCenter.x, z: t.lastCenter.z, r: 74, top: t.pos.y };
+        // Dive off the top
+        t.straight(40).boost(14).straight(340, -136).straight(40, -4);
+        t.turn(90, 90);
+        // South: double loop, double corkscrew, a last jump
+        t.straight(60).paint('#ff2bd6').loop(46, -1).paint('#1f4bff').straight(24).paint('#00d2ff').loop(46, -1).paint('#1f4bff');
+        t.straight(60).paint('#b400ff').corkscrew(150, 2).paint('#1f4bff').straight(80);
+        t.paint('#ffe600').ramp(16, 2).gap(54, -2).paint('#1f4bff').straight(80);
+        t.turn(-90, 90);
+        // West: home run
+        t.straight(b).paint('#ff2bd6').straight(40, 8).straight(40, -8).straight(40, 8).straight(40, -8).paint('#1f4bff');
+        // Spiral flyover
+        t.straight(40).paint('#00d2ff').turn(180, 62, 8).turn(180, 76, 8).paint('#1f4bff').straight(90, -16);
+        t.boost(14).straight(60);
+        t.turn(-90, 90);
+        return t;
+      });
+    },
   },
 };
 export const TRACK_IDS = Object.keys(TRACKS);

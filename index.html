@@ -23,6 +23,7 @@
         <label>Driver name <input id="name" maxlength="16" placeholder="Speedy" autocomplete="off" /></label>
         <div class="label">Your car</div>
         <div id="carPick"></div>
+        <div id="carStats" class="carStats"></div>
         <div id="colors"></div>
 
         <div class="cols">
@@ -33,6 +34,7 @@
               <button data-mode="battle">💥 Battle</button>
             </div>
             <label>Map <select id="map"></select></label>
+            <div id="mapPreview" class="mapPreview"><div class="shot"></div><p class="facts"></p></div>
             <div class="row2">
               <label>AI cars
                 <select id="bots">
@@ -143,6 +145,7 @@
         <div id="carSwap" class="hidden">
           <div class="label">Change car</div>
           <div class="swapGrid"></div>
+          <div id="swapStats" class="carStats"></div>
           <p id="carSwapNote" class="hintsm"></p>
         </div>
         <button id="resume" class="primary">Play</button>

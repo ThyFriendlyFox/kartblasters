@@ -210,10 +210,10 @@ export class RaceCar {
       }
       this.padT -= dt;
       const padded = this.padT > 0;
-      const top = BASE_TOP * st.speed * this.topMul * (this.boosting ? 1.3 : 1) * (padded ? 1.3 : 1);
+      const top = BASE_TOP * st.speed * this.topMul * (this.boosting ? 1 + 0.3 * st.boost : 1) * (padded ? 1.3 : 1);
 
       if (input.throttle > 0) {
-        if (this.v < top) this.v += 30 * st.accel * (1 - 0.5 * Math.max(0, this.v) / top) * input.throttle * dt * (this.boosting || padded ? 2 : 1);
+        if (this.v < top) this.v += 30 * st.accel * (1 - 0.5 * Math.max(0, this.v) / top) * input.throttle * dt * (this.boosting ? 1 + st.boost : padded ? 2 : 1);
       } else if (input.throttle < 0) {
         this.v -= (this.v > 0 ? 55 : 22) * dt;
         this.v = Math.max(this.v, -16);
@@ -384,7 +384,7 @@ export class RaceCar {
         ev.air = this.flyT;
         this.scoreTricks(ev);
       }
-      if (this.flying && (this.wpos.y < 0.8 || this.flyT > 5)) {
+      if (this.flying && (this.wpos.y < track.groundY(this.wpos.x, this.wpos.z) + 0.8 || this.flyT > 5)) {
         this.flying = false;
         this.crashT = 1.4;
         this.v = 0;
@@ -1147,6 +1147,7 @@ export class RaceGame {
     }
 
     this.track.update(dt);
+    this.track.followShadow(this.me.wpos);
     if (this.track.smokeAt && Math.random() < dt * 5) {
       _v.copy(this.track.smokeAt).add(_x.set((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8));
       this.fx.spawn({ color: '#3a3032', pos: _v, vel: _x.set((Math.random() - 0.5) * 3, 6 + Math.random() * 4, (Math.random() - 0.5) * 3), life: 5, size: 5, grow: 4, opacity: 0.5 });

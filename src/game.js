@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { buildArena, pointBlocked } from './arena.js';
 import { Kart } from './kart.js';
-import { CARS, CAR_IDS, carThumbnail } from './cars.js';
+import { CARS, CAR_IDS, carThumbnail, statBarsHTML } from './cars.js';
 import { Fx } from './fx.js';
 import { BotBrain, BOT_NAMES } from './bots.js';
 import { Hud } from './hud.js';
@@ -995,6 +995,7 @@ export class Game {
   refreshCarSwap() {
     if (!this.swapBtns) return;
     const next = this.pendingCar || this.me.carType;
+    document.getElementById('swapStats').innerHTML = `<b>${CARS[next].name}</b>${statBarsHTML(next)}`;
     for (const [id, b] of Object.entries(this.swapBtns)) {
       b.classList.toggle('on', id === next);
       b.classList.toggle('current', id === this.me.carType);

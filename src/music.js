@@ -22,6 +22,11 @@ export const TRACKS = {
     kick: 'x...x...x...x...', snare: '....x.......x..x', hat: 'x.x.x.x.x.x.x.x.',
     bass: 'R.R.oR.RR.R.oR.R', arp: 'updown', arpWave: 'square', pad: 'triangle', lead: 'square', bright: 0.8,
   },
+  alpine: {
+    bpm: 138, root: 55, mode: 'major', prog: [0, 3, 4, 5],
+    kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.xx',
+    bass: 'R.oR.RoRR.oR.RoR', arp: 'up', arpWave: 'triangle', pad: 'triangle', lead: 'square', bright: 0.85,
+  },
   neon: {
     bpm: 110, root: 45, mode: 'minor', prog: [0, 5, 2, 6],
     kick: 'x...x...x...x...', snare: '....x.......x...', hat: '..x...x...x...xx',

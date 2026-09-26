@@ -221,9 +221,9 @@ export class Kart {
 
     // Throttle / brake
     const st = this.stats;
-    const top = (this.boosting ? BOOST_SPEED : MAX_SPEED) * st.speed;
+    const top = (this.boosting ? MAX_SPEED + (BOOST_SPEED - MAX_SPEED) * st.boost : MAX_SPEED) * st.speed;
     if (input.throttle > 0) {
-      if (vF < top) vF += (this.boosting ? 62 : 34) * st.accel * input.throttle * dt * control;
+      if (vF < top) vF += (this.boosting ? 62 * st.boost : 34) * st.accel * input.throttle * dt * control;
     } else if (input.throttle < 0) {
       if (vF > 0.5) vF -= 48 * dt * control;
       else if (vF > -REVERSE_SPEED) vF -= 22 * dt * control;
