@@ -238,13 +238,37 @@ export class RaceCar {
       this.d += this.v * Math.sin(this.psi) * dt;
 
       const lim = path.hw - CAR_HALF_W;
-      if (Math.abs(this.d) > lim) {
-        const hit = Math.abs(this.v * Math.sin(this.psi));
-        this.d = Math.sign(this.d) * lim;
-        if (Math.sign(this.psi) === Math.sign(this.d)) this.psi *= 0.15;
-        this.v -= Math.min(hit * 0.35, Math.max(0, this.v) * 0.3);
-        this.v *= 1 - 0.4 * dt;
-        ev.bump = hit;
+      let lo = -lim, hi = lim, merging = false;
+      if (this.route === 0) {
+        // Inside a Y the road is wider: the branch-side lane is drivable too
+        // (the zone we were in at the start of this step counts, so crossing the
+        // point of the Y doesn't clamp us back before the lane choice is made)
+        const z = track.zoneAt(this.s) || track.zoneAt(prevS);
+        if (z) {
+          const open = !z.br.lock || this.keys.has(z.br.lock);
+          if (open) {
+            if (z.off > 0) hi = z.off + lim;
+            else lo = z.off - lim;
+            merging = z.kind === 'join';
+          } else if (z.kind === 'fork' && Math.sign(this.d) === z.br.side && Math.abs(this.d) > lim - 0.3) {
+            ev.locked = z.br;
+          }
+        }
+      }
+      if (this.d > hi || this.d < lo) {
+        const edge = this.d > hi ? hi : lo;
+        if (merging && Math.abs(this.d) > lim) {
+          // Lanes merging: ease the car in rather than slamming it into a wall
+          this.d += clamp(edge - this.d, -16 * dt, 16 * dt);
+          if (Math.sign(this.psi) === Math.sign(this.d)) this.psi *= Math.exp(-4 * dt);
+        } else {
+          const hit = Math.abs(this.v * Math.sin(this.psi));
+          this.d = edge;
+          if (Math.sign(this.psi) === Math.sign(edge)) this.psi *= 0.15;
+          this.v -= Math.min(hit * 0.35, Math.max(0, this.v) * 0.3);
+          this.v *= 1 - 0.4 * dt;
+          ev.bump = hit;
+        }
       }
 
       if (this.route === 0) {
@@ -255,17 +279,23 @@ export class RaceCar {
           this.s += track.L;
           this.lap--;
         }
-        // Forks: whoever is on the branch side of the road (and holds its key) takes the other route
         for (const br of track.branches) {
-          if (prevS < br.from && this.s >= br.from && Math.sign(this.d) === br.side && Math.abs(this.d) > 0.4) {
-            if (br.lock && !this.keys.has(br.lock)) {
-              ev.locked = br;
-              continue;
-            }
+          const f = br.fork, j = br.join;
+          // At the point of the Y, whichever lane you're in decides your route
+          if (prevS < f.gs && this.s >= f.gs && (this.d - f.off / 2) * Math.sign(f.off) > 0 && (!br.lock || this.keys.has(br.lock))) {
             this.route = br.id;
-            this.s -= br.from;
-            this.d -= br.off;
+            this.s = f.bs + (this.s - f.gs);
+            this.d -= f.off;
+            this.psi -= f.dpsi;
             ev.route = br;
+            break;
+          }
+          // Reversing back up into a route from the merge
+          if (prevS > j.gs && this.s <= j.gs && (this.d - j.off / 2) * Math.sign(j.off) > 0) {
+            this.route = br.id;
+            this.s = j.bs - (j.gs - this.s);
+            this.d -= j.off;
+            this.psi -= j.dpsi;
             break;
           }
         }
@@ -277,22 +307,18 @@ export class RaceCar {
         }
       } else {
         const br = track.branches[this.route - 1];
-        // Ease toward the half of the road that merges back into the main circuit
-        if (path.L - this.s < 45) {
-          const mlim = track.hw - CAR_HALF_W;
-          const lo = Math.max(-lim, -mlim - br.off), hi = Math.min(lim, mlim - br.off);
-          if (this.d > hi) this.d -= Math.min(this.d - hi, 10 * dt);
-          if (this.d < lo) this.d += Math.min(lo - this.d, 10 * dt);
-        }
-        if (this.s >= path.L) {
+        if (this.s >= br.join.bs) {
+          // Past the inverse Y: back on the main road, in the lane we came in on
           this.route = 0;
-          this.s = br.to + (this.s - path.L);
-          this.d = clamp(this.d + br.off, -track.hw + CAR_HALF_W, track.hw - CAR_HALF_W);
+          this.s = br.join.gs + (this.s - br.join.bs);
+          this.d += br.join.off;
+          this.psi += br.join.dpsi;
           ev.merged = br;
-        } else if (this.s < 0) {
+        } else if (this.s < br.fork.bs) {
           this.route = 0;
-          this.s = br.from + this.s;
-          this.d = clamp(this.d + br.off, -track.hw + CAR_HALF_W, track.hw - CAR_HALF_W);
+          this.s = br.fork.gs - (br.fork.bs - this.s);
+          this.d += br.fork.off;
+          this.psi += br.fork.dpsi;
         }
       }
       path = track.pathOf(this.route);
@@ -559,7 +585,7 @@ export class RaceCar {
 
 // ------------------------------------------------------------------ AI
 
-class RaceBrain {
+export class RaceBrain {
   constructor() {
     this.lane = (Math.random() - 0.5) * 4;
     this.fr = Track.newFrame();
@@ -600,6 +626,7 @@ class RaceBrain {
     kAvg /= cnt;
     const hw = path.hw;
     let target = clamp(kAvg * 280, -hw * 0.5, hw * 0.5) + this.lane;
+    let wantCap = 0.35;
     for (const o of cars) {
       if (o === car || !o.inRace || o.flying || o.route !== car.route) continue;
       const ds = path.delta(car.s, o.s);
@@ -614,18 +641,34 @@ class RaceBrain {
         if (!car.keys.has(k.id) && ahead > 0 && ahead < 70) target = k.d;
       }
       for (const br of track.branches) {
-        const ahead = track.delta(car.s, br.from);
-        if (ahead < 0 || ahead > 80) continue;
+        const ahead = track.delta(car.s, br.fork.gs);
+        if (ahead < 0 || ahead > 100) continue;
         if (!this.routeRoll.has(br.id) || this.routeRoll.get(br.id).lap !== car.lap) {
           this.routeRoll.set(br.id, { lap: car.lap, take: br.lock ? true : Math.random() < 0.5 });
         }
         const take = this.routeRoll.get(br.id).take && (!br.lock || car.keys.has(br.lock));
-        target = take ? br.side * hw * 0.55 : -br.side * 2.5;
+        // In the Y itself, follow the chosen lane's centerline
+        // In the Y itself, aim where the chosen lane will be a little way ahead
+        const z = track.zoneAt(car.s);
+        const inFork = z && z.br === br && z.kind === 'fork';
+        const zAhead = track.zoneAt(car.s + 18);
+        const lead = zAhead && zAhead.br === br && zAhead.kind === 'fork' ? zAhead.off : inFork ? br.fork.off : br.side * hw * 0.6;
+        target = take ? lead : -br.side * 2.5;
+        if (take) {
+          // Brake for the route's own bends, not just the main road's
+          for (let a2 = 0; a2 <= 60; a2 += 6) {
+            br.path.frame(Math.max(0, car.s - br.from + a2), this.fr);
+            kMax = Math.max(kMax, Math.abs(this.fr.k));
+          }
+        }
+        if (take && (inFork || zAhead?.br === br)) wantCap = 0.65;
       }
     }
-    target = clamp(target, -hw + 2, hw - 2);
+    const zz = car.route === 0 ? track.zoneAt(car.s) : null;
+    const lo = -hw + 2 + (zz && zz.off < 0 ? zz.off : 0), hi = hw - 2 + (zz && zz.off > 0 ? zz.off : 0);
+    target = clamp(target, lo, hi);
     path.frame(car.s, fr);
-    const want = clamp((target - car.d) * 0.1, -0.35, 0.35);
+    const want = clamp((target - car.d) * 0.1, -wantCap, wantCap);
     const vmax = Math.sqrt((GRIPC * car.stats.grip) / Math.max(kMax, 1e-4));
     input.drift = car.v > vmax * 1.02 && car.v > 25;
     car.drifting = input.drift && car.v > 18;
@@ -1171,8 +1214,8 @@ export class RaceGame {
   camPoint(c, ds, d, h, out) {
     const fr = (this.camFr ||= Track.newFrame());
     const br = c.route ? this.track.branches[c.route - 1] : null;
-    if (br && c.s + ds < 0) return this.track.toWorld(br.from + c.s + ds, d + br.off, h, out, fr);
-    if (br && c.s + ds > br.path.L) return this.track.toWorld(br.to + c.s + ds - br.path.L, d + br.off, h, out, fr);
+    if (br && c.s + ds < br.fork.bs) return this.track.toWorld(br.fork.gs + c.s + ds - br.fork.bs, d + br.fork.off, h, out, fr);
+    if (br && c.s + ds > br.join.bs) return this.track.toWorld(br.join.gs + c.s + ds - br.join.bs, d + br.join.off, h, out, fr);
     return this.track.pathOf(c.route).toWorld(c.s + ds, d, h, out, fr);
   }
 

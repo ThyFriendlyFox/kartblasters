@@ -139,6 +139,41 @@ export class TrackTurtle {
     return this;
   }
 
+  /**
+   * Lane-change S-curve: shift sideways by `lateral` (+ = right) and end up
+   * heading the same way. Used to peel a route cleanly away from the main road.
+   */
+  sOut(lateral, angleDeg = 25) {
+    const a = THREE.MathUtils.degToRad(angleDeg);
+    const r = Math.abs(lateral) / (2 * (1 - Math.cos(a)));
+    const sgn = Math.sign(lateral) || 1;
+    return this.turn(-sgn * angleDeg, r).turn(sgn * angleDeg, r);
+  }
+
+  /**
+   * Finish a route: run straight (absorbing any height change), then a mirror
+   * S-curve that lands exactly on the target point and heading.
+   */
+  closeS(p1, yaw1, angleDeg = 25) {
+    const d = this.dir(), r = this.right();
+    const rel = p1.clone().sub(this.pos);
+    const fwd = rel.x * d.x + rel.z * d.z, lat = rel.x * r.x + rel.z * r.z;
+    // Use the gentlest S-curve that fits the room left
+    let run = -1, sLen = 0;
+    for (const deg of [angleDeg, 32, 40]) {
+      const a = THREE.MathUtils.degToRad(deg);
+      const rad = Math.abs(lat) / (2 * (1 - Math.cos(a)));
+      sLen = Math.abs(lat) < 0.5 ? 0 : 2 * rad * Math.sin(a);
+      run = fwd - sLen;
+      angleDeg = deg;
+      if (run >= 4) break;
+    }
+    if (run < 4) throw new Error(`closeS: route is ${(4 - run).toFixed(1)} units too long for the main road it rejoins`);
+    this.straight(run, rel.y);
+    if (sLen) this.sOut(lat, angleDeg);
+    return this.closeTo(p1, yaw1);
+  }
+
   /** Name the current point (forks, joins and key pickups refer to marks). */
   mark(name) {
     this.marks[name] = { pos: this.pos.clone(), yaw: this.yaw, idx: this.pts.length - 1 };
@@ -193,7 +228,7 @@ export class TrackTurtle {
 }
 
 // Leg lengths chosen so each circuit closes back on its start line
-const LEG = { twin2: 60, twin3: 60, twin4: 174, junc2: 60, junc3: 110, junc4: 156 };
+const LEG = { twin2: 60, twin3: 210, twin4: 186, junc2: 60, junc3: 88, junc4: 170 };
 
 export const TRACKS = {
   orange: {
@@ -300,7 +335,7 @@ export const TRACKS = {
       const t = new TrackTurtle(0, 4, 0, 0, this.width).paint('#ff7a00');
       t.straight(40).boost(12).straight(20).mark('f1');
       // Low road: flat and fast
-      t.straight(40).boost(12).straight(60).boost(12).straight(26).mark('j1');
+      t.straight(80).boost(12).straight(120).boost(12).straight(76).mark('j1');
       t.straight(20);
       t.turn(-90, 45);
       t.straight(20).mark('k1').straight(30);
@@ -321,13 +356,14 @@ export const TRACKS = {
       {
         from: 'f1', to: 'j1', side: 1, name: 'HIGH ROAD', color: '#39d353',
         build(b) {
-          b.turn(-28, 60).straight(24, 8).paint('#ffd000').ramp(14, 1.6).gap(36, -4).paint('#39d353').straight(24, -7).turn(22, 70);
+          // Peel off flat, climb, jump, come back down, merge back in
+          b.sOut(18).straight(6).straight(26, 7).paint('#ffd000').ramp(14, 1.6).gap(34, -4).paint('#39d353').straight(24, -4.6);
         },
       },
       {
         from: 'f2', to: 'j2', side: 1, name: 'SHORTCUT', color: '#b400ff', lock: 'k1',
         build(b) {
-          b.turn(-30, 45).straight(10).corkscrew(60, 1).turn(30, 45).boost(12);
+          b.sOut(18).straight(8).corkscrew(54, 1).boost(10);
         },
       },
     ],
@@ -342,7 +378,7 @@ export const TRACKS = {
       const t = new TrackTurtle(0, 26, 0, 0, this.width).paint('#1f4bff');
       t.straight(40).boost(12).straight(20).mark('f1');
       // Upper deck: rolling waves
-      t.straight(40).paint('#ff2bd6').straight(30, 6).straight(30, -6).straight(30, 6).straight(30, -6).paint('#1f4bff').straight(40).mark('j1');
+      t.straight(90).paint('#ff2bd6').straight(30, 6).straight(30, -6).straight(30, 6).straight(30, -6).paint('#1f4bff').straight(90).mark('j1');
       t.straight(20);
       t.turn(-90, 50);
       t.straight(30);
@@ -351,7 +387,7 @@ export const TRACKS = {
       t.turn(-90, 50);
       t.straight(20).mark('f2');
       // Long way round: zig-zag with a loop
-      t.straight(20).turn(70, 38).paint('#00d2ff').loop(26, 1).paint('#1f4bff').turn(-140, 38).turn(70, 38).straight(20).mark('j2');
+      t.straight(80).turn(70, 38).paint('#00d2ff').loop(26, 1).paint('#1f4bff').turn(-140, 38).turn(70, 38).straight(80).mark('j2');
       t.straight(LEG.junc3);
       t.turn(-90, 50);
       t.boost(12).straight(LEG.junc4);
@@ -362,13 +398,13 @@ export const TRACKS = {
       {
         from: 'f1', to: 'j1', side: -1, name: 'LOWER DECK', color: '#00d2ff',
         build(b) {
-          b.turn(20, 70).straight(30, -12).boost(12).straight(40).boost(12).straight(30, 12).turn(-20, 70);
+          b.sOut(-20).straight(6).straight(24, -10).boost(12).straight(16).boost(12).straight(24, 10);
         },
       },
       {
         from: 'f2', to: 'j2', side: 1, name: 'EXPRESS', color: '#ffe600', lock: 'k1',
         build(b) {
-          b.turn(-30, 50).straight(35, 14).turn(30, 50).boost(12).straight(30).boost(12).straight(35, -14);
+          b.sOut(20).straight(8).straight(26, 10).boost(12).straight(26, -10);
         },
       },
     ],

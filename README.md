@@ -80,7 +80,7 @@ Everyone sees the same holes. Craters are carved so the result doesn't depend on
 
 Take the jumps fast: if you come up short, you wipe out and respawn past the landing.
 
-**Routes and keys:** on Twin Peaks and Neon Junction the road forks. Stay on the side the sign points to and you take that route. Locked routes (🔒) open once you drive through that track's golden key 🔑, and stay open for you for the rest of the race.
+**Routes and keys:** on Twin Peaks and Neon Junction the road splits in a Y: it widens, a striped divider appears, and the two roads peel apart. Keep to the side the sign points to and you take that route; later the routes come back together in an inverse Y and merge into one road again. Locked routes (🔒) open once you drive through that track's golden key 🔑, and stay open for you for the rest of the race.
 
 **Tricks:** in the air, tap A/D to spin or Space to flip. You can chain them. Land with the trick finished for a speed boost (bigger combos give a bigger boost). Land mid-trick and you lose speed.
 

@@ -218,7 +218,7 @@ export class Path {
     return best;
   }
 
-  buildRoad(scene, theme, { startLine = false, lift = 0 } = {}) {
+  buildRoad(scene, theme, { startLine = false, lift = 0, onTop = false } = {}) {
     const n = this.n, hw = this.hw;
     const STEP = 2; // mesh every 2 samples
     const rows = [];
@@ -292,6 +292,11 @@ export class Path {
       metalness: neon ? 0.3 : 0.05,
       side: THREE.DoubleSide,
       emissive: neon ? '#0a1440' : '#000000',
+      // Branch roads share the fork area with the main road: draw them on top
+      // instead of letting the two coplanar surfaces flicker
+      polygonOffset: onTop,
+      polygonOffsetFactor: onTop ? -1 : 0,
+      polygonOffsetUnits: onTop ? -4 : 0,
     });
     const railMat = neon
       ? new THREE.MeshStandardMaterial({ color: '#ffe600', emissive: '#b8a000', emissiveIntensity: 0.8, side: THREE.DoubleSide })
@@ -407,25 +412,92 @@ export class Track extends Path {
     (def.branches || []).forEach((bd, bi) => {
       const a = markS(bd.from), b = markS(bd.to);
       const side = bd.side || 1;
-      const off = side * this.hw * 0.5;
+      // The route leaves from the main road's own centerline and heading (a true Y),
+      // and rejoins the same way (an inverse Y)
       this.frame(a, fr);
-      const start = fr.P.clone().addScaledVector(fr.R, off);
       const N0 = fr.N.clone();
-      const bt = new TrackTurtle(start.x, start.y, start.z, Math.atan2(fr.T.x, fr.T.z), def.width).paint(bd.color || '#ff7a00');
+      const bt = new TrackTurtle(fr.P.x, fr.P.y, fr.P.z, Math.atan2(fr.T.x, fr.T.z), def.width).paint(bd.color || '#ff7a00');
       bd.build(bt);
       this.frame(b, fr);
-      bt.closeTo(fr.P.clone().addScaledVector(fr.R, off), Math.atan2(fr.T.x, fr.T.z));
+      bt.closeS(fr.P.clone(), Math.atan2(fr.T.x, fr.T.z));
       const path = new Path(bt.pts, { closed: false, hw: this.hw, N0 });
-      const edge = Math.round(40 / path.ds);
-      // Hide the rails where the routes overlap the main road
-      const inner = side > 0 ? path.railL : path.railR;
-      for (let i = 0; i < Math.min(edge, path.n); i++) inner[i] = inner[path.n - 1 - i] = 0;
+      const br = { id: bi + 1, path, from: a, to: b, side, name: bd.name || 'ALT ROUTE', lock: bd.lock || null };
+      br.fork = this.splitZone(path, a, +1);
+      br.join = this.splitZone(path, b, -1);
+      // Where the two roads overlap, the inner rails give way to one wide road...
       const mainRail = side > 0 ? this.railR : this.railL;
-      for (let s = a - 4; s < a + 44; s += this.ds) mainRail[this.idx(s)] = 0;
-      for (let s = b - 44; s < b + 4; s += this.ds) mainRail[this.idx(s)] = 0;
-      this.branches.push({ id: bi + 1, path, from: a, to: b, side, off, name: bd.name || 'ALT ROUTE', lock: bd.lock || null });
+      for (let s = a - 1; s <= br.fork.gs + 0.5; s += this.ds) mainRail[this.idx(s)] = 0;
+      for (let s = br.join.gs - 0.5; s <= b + 1; s += this.ds) mainRail[this.idx(s)] = 0;
+      const inner = side > 0 ? path.railL : path.railR;
+      // ...and the route's paint fades in from the main road's color after the
+      // gore (and back out before the join) instead of switching at a hard line
+      const FADE = 26;
+      const ca = new THREE.Color(), cb = new THREE.Color();
+      for (let i = 0; i < path.n; i++) {
+        const bs = i * path.ds;
+        if (bs <= br.fork.bs + 0.5 || bs >= br.join.bs - 0.5) inner[i] = 0;
+        const fromFork = bs - br.fork.bs, toJoin = br.join.bs - bs;
+        const near = fromFork < toJoin;
+        const k = Math.min(1, Math.max(0, (near ? fromFork : toJoin) / FADE));
+        if (k >= 1) continue;
+        ca.set(this.color[this.idx(near ? a + bs : b - (path.L - bs))]);
+        cb.set(path.color[i]);
+        path.color[i] = '#' + ca.lerp(cb, k * k * (3 - 2 * k)).getHexString();
+      }
+      this.branches.push(br);
     });
     for (const k of def.keys || []) this.keys.push({ id: k.id, s: markS(k.at), d: k.d || 0 });
+  }
+
+  /**
+   * Follow the branch alongside the main road from the fork (dir=+1) or back
+   * from the join (dir=-1) until the two roads no longer overlap (the "gore").
+   * Records the branch's lateral offset (in the main road's frame) per unit of
+   * main-road distance so physics can let cars use the whole widening road.
+   */
+  splitZone(path, s0, dir) {
+    const gap = 2 * this.hw + 1.0; // centerlines this far apart = rails just touch
+    const fr = Path.newFrame(), bf = Path.newFrame();
+    const offs = [];
+    let j = dir > 0 ? 0 : path.L;
+    const v = new THREE.Vector3();
+    for (let k = 0; k < 400; k++) {
+      const s = s0 + dir * k;
+      this.frame(s, fr);
+      // Step along the branch until it crosses the plane through this main-road point
+      for (let it = 0; it < 400; it++) {
+        path.frame(j, bf);
+        const along = v.copy(bf.P).sub(fr.P).dot(fr.T) * dir;
+        if (along >= 0 || (dir > 0 ? j >= path.L : j <= 0)) break;
+        j += dir * 0.25;
+      }
+      path.frame(j, bf);
+      v.copy(bf.P).sub(fr.P);
+      const off = v.dot(fr.R), dy = v.y; // world height, so banked corners don't count
+      offs.push(off);
+      if (Math.abs(off) >= gap || Math.abs(dy) > 3) {
+        // Heading of the branch relative to the main road at the gore
+        const dpsi = Math.atan2(bf.T.dot(fr.R), bf.T.dot(fr.T));
+        return { gs: s, bs: j, off, dpsi, offs, s0, dir };
+      }
+    }
+    throw new Error(`Track ${this.id}: route never separates from the main road`);
+  }
+
+  /** If s is inside a fork/join overlap on the main road, the branch's offset there. */
+  zoneAt(s) {
+    for (const br of this.branches) {
+      for (const z of [br.fork, br.join]) {
+        const k = z.dir > 0 ? this.delta(z.s0, s) : this.delta(s, z.s0);
+        const len = Math.abs(z.gs - z.s0);
+        if (k >= 0 && k <= len) {
+          const i = Math.floor(k), t = k - i;
+          const o = z.offs[Math.min(i, z.offs.length - 1)] * (1 - t) + z.offs[Math.min(i + 1, z.offs.length - 1)] * t;
+          return { br, zone: z, off: o, kind: z.dir > 0 ? 'fork' : 'join' };
+        }
+      }
+    }
+    return null;
   }
 
   /** The Path a car on `route` drives on (0 = main circuit). */
@@ -444,7 +516,7 @@ export class Track extends Path {
     const theme = this.def.theme;
     buildEnvironment(scene, theme, this);
     this.buildRoad(scene, theme, { startLine: true });
-    for (const br of this.branches) br.path.buildRoad(scene, theme, { lift: 0.03 });
+    for (const br of this.branches) br.path.buildRoad(scene, theme, { lift: 0.03, onTop: true });
     this.buildRouteProps(scene, theme);
   }
 
@@ -454,37 +526,61 @@ export class Track extends Path {
     this.gates = new Map();
     this.keyMeshes = new Map();
     for (const br of this.branches) {
-      // Sign gantry just before the fork, over the branch half of the road
-      this.frame(br.from - 22, fr);
-      const sign = new THREE.Mesh(
-        new THREE.BoxGeometry(this.hw, 2.4, 0.4),
-        new THREE.MeshBasicMaterial({ map: signTexture(`${br.lock ? '🔒 ' : ''}${br.name} ${br.side > 0 ? '➜' : '⬅'}`, br.lock ? '#ffd000' : '#00e5ff') }),
-      );
-      sign.position.copy(fr.P).addScaledVector(fr.R, br.off).addScaledVector(fr.N, 8);
-      sign.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(fr.R.clone().negate(), fr.N, fr.T.clone().negate()));
-      scene.add(sign);
+      // Sign gantry before the fork: one sign per lane of the Y
+      this.frame(br.from - 26, fr);
+      const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(fr.R.clone().negate(), fr.N, fr.T.clone().negate()));
+      const signs = [
+        [br.side * this.hw * 0.5, `${br.lock ? '🔒 ' : ''}${br.name} ${br.side > 0 ? '➜' : '⬅'}`, br.lock ? '#ffd000' : '#00e5ff'],
+        [-br.side * this.hw * 0.5, br.side > 0 ? '⬅ MAIN' : 'MAIN ➜', '#ffffff'],
+      ];
+      for (const [lat, text, color] of signs) {
+        const sign = new THREE.Mesh(new THREE.BoxGeometry(this.hw * 0.95, 2.2, 0.4), new THREE.MeshBasicMaterial({ map: signTexture(text, color) }));
+        sign.position.copy(fr.P).addScaledVector(fr.R, lat).addScaledVector(fr.N, 8);
+        sign.quaternion.copy(q);
+        scene.add(sign);
+      }
       const postMat = new THREE.MeshStandardMaterial({ color: '#444a55' });
       for (const e of [-1, 1]) {
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.4, 8, 0.4), postMat);
-        post.position.copy(fr.P).addScaledVector(fr.R, br.off + (e * this.hw) / 2).addScaledVector(fr.N, 4);
-        post.quaternion.copy(sign.quaternion);
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.4, 9, 0.4), postMat);
+        post.position.copy(fr.P).addScaledVector(fr.R, e * (this.hw + 1)).addScaledVector(fr.N, 4.5);
+        post.quaternion.copy(q);
         scene.add(post);
       }
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(this.hw * 2 + 2.4, 0.4, 0.4), postMat);
+      beam.position.copy(fr.P).addScaledVector(fr.N, 9.2);
+      beam.quaternion.copy(q);
+      scene.add(beam);
+
+      // Striped bollard at the point of each V where the roads part / meet
+      for (const z of [br.fork, br.join]) {
+        this.frame(z.gs, fr);
+        const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, 1.6, 12), new THREE.MeshStandardMaterial({ map: stripeTex(), emissive: '#332200' }));
+        nose.position.copy(fr.P).addScaledVector(fr.R, z.off / 2).addScaledVector(fr.N, 0.8);
+        nose.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), fr.N);
+        scene.add(nose);
+      }
+
       if (!br.lock) continue;
-      // Force-field gate where the route has split away from the main road
-      const gs = Math.min(br.path.L * 0.3, 45);
-      br.path.frame(gs, fr);
+      // Locked: a force-field wall along the lane divider of the Y until you have the key
+      const pos = [], uv = [];
+      const P = new THREE.Vector3();
+      const len = Math.abs(br.fork.gs - br.fork.s0);
+      for (let k = 0; k < len; k += 2) {
+        const k2 = Math.min(len, k + 2);
+        for (const [kk, h, u] of [[k, 0, 0], [k2, 0, 1], [k2, 4, 1], [k, 0, 0], [k2, 4, 1], [k, 4, 0]]) {
+          const lat = br.side * this.hw; // the main lane's edge
+          this.frame(br.from + kk, fr);
+          P.copy(fr.P).addScaledVector(fr.R, lat).addScaledVector(fr.N, h);
+          pos.push(P.x, P.y, P.z);
+          uv.push((kk / 8) + u * 0, h / 4);
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
       const gate = new THREE.Group();
-      const field = new THREE.Mesh(
-        new THREE.PlaneGeometry(this.hw * 2, 4.5),
-        new THREE.MeshBasicMaterial({ map: gateTexture(), transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }),
-      );
-      field.position.y = 2.25;
-      gate.add(field);
-      gate.position.copy(fr.P);
-      gate.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(fr.R, fr.N, fr.T.clone().negate()));
+      gate.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: gateTexture(), transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false })));
       scene.add(gate);
-      br.gateS = gs;
       this.gates.set(br.lock, gate);
     }
     const keyMat = new THREE.MeshStandardMaterial({ color: '#ffd000', emissive: '#aa7a00', metalness: 0.8, roughness: 0.25 });
@@ -584,6 +680,16 @@ function checkerTexture() {
     for (let x = 0; x < 16; x++) for (let y = 0; y < 2; y++) {
       g.fillStyle = (x + y) % 2 ? '#111' : '#fff';
       g.fillRect(x * 16, y * 16, 16, 16);
+    }
+  });
+  return t;
+}
+
+function stripeTex() {
+  const t = canvasTex(64, 64, (g, w, h) => {
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle = i % 2 ? '#111' : '#ffd000';
+      g.fillRect(0, (i * h) / 8, w, h / 8);
     }
   });
   return t;
