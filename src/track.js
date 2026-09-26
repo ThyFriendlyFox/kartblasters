@@ -492,6 +492,7 @@ export class Path {
   }
 
   buildStands(scene, neon) {
+    if (this.pillars) return this.buildTrussPillars(scene, neon);
     const n = this.n;
     const P = new THREE.Vector3(), N = new THREE.Vector3();
     // Support stands under the track
@@ -522,6 +523,57 @@ export class Path {
       const foot = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.8, 0.4, 16), neon ? glowMat : standMat);
       foot.position.set(top.x, g + 0.2, top.z);
       scene.add(foot);
+    }
+  }
+
+  /** Chunky lattice pillars (Trackmania-style scaffolding) under elevated road. */
+  buildTrussPillars(scene, neon) {
+    const n = this.n;
+    const col = neon ? '#2de2ff' : '#c8342b';
+    const tex = canvasTex(64, 64, (g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      g.strokeStyle = col;
+      g.lineWidth = 6;
+      g.strokeRect(3, 3, w - 6, h - 6);
+      g.lineWidth = 4;
+      g.beginPath();
+      g.moveTo(3, 3);
+      g.lineTo(w - 3, h - 3);
+      g.moveTo(w - 3, 3);
+      g.lineTo(3, h - 3);
+      g.stroke();
+    });
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    const mat = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, metalness: 0.4, roughness: 0.5, emissive: neon ? '#0b4a66' : '#000', emissiveMap: neon ? tex : null });
+    const capMat = new THREE.MeshStandardMaterial({ color: neon ? '#22273f' : '#3a3d45', metalness: 0.5, roughness: 0.5 });
+    const P = new THREE.Vector3(), N = new THREE.Vector3();
+    const W = 3;
+    for (let i = 0; i < n; i += Math.round(34 / this.ds)) {
+      if (this.gap[i]) continue;
+      P.fromArray(this.P, i * 3);
+      N.fromArray(this.N, i * 3);
+      if (N.y < 0.8 || P.y < 3) continue;
+      const top = P.clone().addScaledVector(N, -0.7);
+      let floor = 0;
+      // Stand on the nearest road below instead of the ground, if there is one
+      for (let j = 0; j < n; j += 2) {
+        const py = this.P[j * 3 + 1];
+        if (py > top.y - 4) continue;
+        const dx = this.P[j * 3] - top.x, dz = this.P[j * 3 + 2] - top.z;
+        if (dx * dx + dz * dz < (this.hw + 3) ** 2) floor = Math.max(floor, py + 1.5);
+      }
+      if (floor > 0) continue; // don't pierce a road below
+      const h = top.y - floor;
+      const g = new THREE.BoxGeometry(W, h, W);
+      const uv = g.attributes.uv;
+      for (let k = 0; k < uv.count; k++) uv.setY(k, uv.getY(k) * (h / W));
+      const m = new THREE.Mesh(g, mat);
+      m.position.set(top.x, floor + h / 2, top.z);
+      m.castShadow = true;
+      scene.add(m);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(W + 2, 0.6, W + 2), capMat);
+      cap.position.set(top.x, top.y - 0.3, top.z);
+      scene.add(cap);
     }
   }
 
@@ -599,6 +651,7 @@ export class Track extends Path {
     });
     for (const k of def.keys || []) this.keys.push({ id: k.id, s: markS(k.at), d: k.d || 0 });
     if (def.mountain) this.mountainS = [markS(def.mountain.from), markS(def.mountain.to)];
+    this.pillars = def.pillars || null;
   }
 
   /**

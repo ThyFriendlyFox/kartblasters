@@ -37,8 +37,8 @@ The menu shows an aerial preview of the selected map with its lap length and a r
 | Twin Peaks | Race | Two routes (low road or the High Road jump) plus a key-locked corkscrew shortcut |
 | Neon Junction | Race | Split-level sky highway (upper waves or Lower Deck) plus a key-locked Express lane |
 | Summit Rush | Race (epic, ~2 min lap) | Switchbacks up a snowy mountain, a leap off the summit and a plunge down the far side, plus loops, a corkscrew and a spiral flyover |
-| Canyon Colossus | Race (epic, ~2 min lap) | Three giant loops, a gorge jump, a climb onto a sandstone mesa and a huge leap off its edge, a double corkscrew |
-| Skyline Spiral | Race (epic, ~2 min lap) | Rooftop jumps, 3½ laps spiralling up a neon skyscraper, a dive off the top, double loop and double corkscrew |
+| Canyon Colossus | Race (epic, ~2 min lap) | Stacked stunt park on lattice pillars: roads cross over and under each other, three wall rides, a spiral climb to a high line, two corkscrews, loops and a long plunge |
+| Skyline Spiral | Race (epic, ~2 min lap) | Neon stunt stack: climbing wall ride, loop, rooftop gaps, a corkscrew, two turns up a skyscraper, a dive onto a banked wall-ride descent, double loop and a wall-ride chicane |
 | Stadium | Battle | Walled arena with cover, jump pads, rocket/health/boost pickups |
 | Crater Field | Battle | Rolling hills with brick forts and stone pillars |
 
