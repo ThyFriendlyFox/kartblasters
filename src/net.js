@@ -26,7 +26,7 @@ function peerOptions() {
 }
 
 // Messages the host forwards to every other peer after handling them.
-const RELAY = new Set(['s', 'f', 'h', 'k', 'fin']);
+const RELAY = new Set(['s', 'f', 'h', 'k', 'fin', 'dig', 'blk']);
 
 export function makeCode() {
   let s = '';

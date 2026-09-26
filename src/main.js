@@ -28,7 +28,10 @@ const store = {
 
 const MAPS = {
   race: TRACK_IDS.map((id) => [id, `${TRACKS[id].name} — ${TRACKS[id].desc}`]),
-  battle: [['stadium', 'Stadium — arena with cover, jump pads and pickups']],
+  battle: [
+    ['stadium', 'Stadium — arena with cover, jump pads and pickups'],
+    ['craters', 'Crater Field — rolling hills and block forts'],
+  ],
 };
 
 let color = store.get('kb-color', COLORS[Math.floor(Math.random() * COLORS.length)]);
@@ -86,6 +89,7 @@ function refreshMode() {
   const prev = store.get(`kb-map-${mode}`, MAPS[mode][0][0]);
   $('map').innerHTML = MAPS[mode].map(([id, label]) => `<option value="${id}"${id === prev ? ' selected' : ''}>${label}</option>`).join('');
   $('lapsWrap').classList.toggle('hidden', mode !== 'race');
+  $('destructWrap').classList.toggle('hidden', mode !== 'battle');
   $('ctlRace').classList.toggle('hidden', mode !== 'race');
   $('ctlBattle').classList.toggle('hidden', mode !== 'battle');
 }
@@ -96,6 +100,8 @@ for (const b of $('modeSeg').children) {
   };
 }
 refreshMode();
+
+$('destruct').checked = store.get('kb-destruct', '1') === '1';
 
 const params = new URLSearchParams(location.search);
 if (params.get('room')) {
@@ -133,7 +139,8 @@ function start(net, code, opts) {
 }
 
 function hostOpts() {
-  return { mode, map: $('map').value, botCount: +$('bots').value, laps: +$('laps').value };
+  store.set('kb-destruct', $('destruct').checked ? '1' : '0');
+  return { mode, map: $('map').value, botCount: +$('bots').value, laps: +$('laps').value, destructible: $('destruct').checked };
 }
 
 $('host').onclick = async () => {

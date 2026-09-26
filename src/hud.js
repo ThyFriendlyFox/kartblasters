@@ -157,9 +157,11 @@ export class Hud {
     g.fillRect(0, 0, S, S);
     g.fillStyle = 'rgba(200,210,230,0.55)';
     for (const b of world.boxes) {
+      if (b.dead) continue;
       g.fillRect(tx(b.maxX), tz(b.maxZ), (b.maxX - b.minX) * scale, (b.maxZ - b.minZ) * scale);
     }
     for (const cy of world.cyls) {
+      if (cy.dead) continue;
       g.beginPath();
       g.arc(tx(cy.x), tz(cy.z), Math.max(1.5, cy.r * scale), 0, Math.PI * 2);
       g.fill();

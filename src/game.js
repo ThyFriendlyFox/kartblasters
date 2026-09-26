@@ -28,7 +28,7 @@ const _dir = new THREE.Vector3();
 const Z = new THREE.Vector3(0, 0, 1);
 
 export class Game {
-  constructor({ net, name, color, car, botCount, sfx, code, welcome }) {
+  constructor({ net, name, color, car, botCount, sfx, code, welcome, map = 'stadium', destructible = false }) {
     this.net = net;
     this.sfx = sfx;
     this.code = code;
@@ -44,7 +44,11 @@ export class Game {
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 600);
-    this.world = buildArena(this.scene);
+    this.mapId = welcome?.map || map;
+    this.destructible = welcome ? !!welcome.destructible : !!destructible;
+    this.world = buildArena(this.scene, { map: this.mapId, destructible: this.destructible });
+    this.digs = []; // crater history, replayed for players who join later
+    this.blockHits = new Map();
     this.fx = new Fx(this.scene);
 
     this.karts = new Map();
@@ -62,7 +66,7 @@ export class Game {
     this.joined = net.isHost;
     this.gameOver = false;
 
-    this.me = new Kart(this.scene, { id: net.myId, name, color, car, local: true });
+    this.me = this.makeKart({ id: net.myId, name, color, car, local: true });
     this.karts.set(net.myId, this.me);
     this.players.set(net.myId, { name, color, car, kills: 0, deaths: 0, bot: false });
 
@@ -125,10 +129,16 @@ export class Game {
         new THREE.MeshBasicMaterial({ color: ringColors[it.type], transparent: true, opacity: 0.6, side: THREE.DoubleSide }),
       );
       ring.rotation.x = -Math.PI / 2;
-      ring.position.set(it.x, 0.03, it.z);
+      ring.position.set(it.x, this.world.groundAt(it.x, it.z) + 0.05, it.z);
       this.scene.add(ring);
       this.items.set(it.id, { ...it, active: true, respawnAt: 0, pending: 0, mesh: g });
     }
+  }
+
+  makeKart(opts) {
+    const k = new Kart(this.scene, opts);
+    k.world = this.world;
+    return k;
   }
 
   addBot(i) {
@@ -137,7 +147,7 @@ export class Game {
     const palette = COLORS.filter((c) => c !== this.me.color);
     const color = palette[(i + 2) % palette.length];
     const car = CAR_IDS[Math.floor(Math.random() * CAR_IDS.length)];
-    const kart = new Kart(this.scene, { id, name, color, car, bot: true });
+    const kart = this.makeKart({ id, name, color, car, bot: true });
     this.karts.set(id, kart);
     this.players.set(id, { name, color, car, kills: 0, deaths: 0, bot: true });
     this.bots.push({ kart, brain: new BotBrain(this.world) });
@@ -148,7 +158,7 @@ export class Game {
     name = String(name || 'Racer').slice(0, 16);
     color = /^#[0-9a-f]{6}$/i.test(color) ? color : '#ffffff';
     this.players.set(id, { name, color, car, kills, deaths, bot });
-    if (!this.karts.has(id)) this.karts.set(id, new Kart(this.scene, { id, name, color, car }));
+    if (!this.karts.has(id)) this.karts.set(id, this.makeKart({ id, name, color, car }));
   }
 
   removePlayer(id) {
@@ -187,6 +197,7 @@ export class Game {
 
   spawnKart(k) {
     k.spawnAt(this.pickSpawn(), performance.now());
+    k.pos.y = this.world.groundAt(k.pos.x, k.pos.z);
     if (k === this.me) this.hud.clearCenter();
   }
 
@@ -291,7 +302,10 @@ export class Game {
         this.net.sendTo(from, {
           t: 'welcome',
           mode: 'battle',
-          map: 'stadium',
+          map: this.mapId,
+          destructible: this.destructible,
+          digs: this.digs,
+          broken: this.world.pieces.filter((b) => b.dead).map((b) => b.id),
           players: [...this.players.entries()].map(([id, q]) => [id, q.name, q.color, q.car, q.bot ? 1 : 0, q.kills, q.deaths]),
           items: [...this.items.values()].map((it) => [it.id, it.active ? 1 : 0]),
         });
@@ -308,6 +322,8 @@ export class Game {
           const it = this.items.get(id);
           if (it) it.active = !!active;
         }
+        for (const d of m.digs || []) this.applyDig(d, false);
+        for (const id of m.broken || []) this.world.destroy(id);
         this.joined = true;
         this.spawnKart(this.me);
         break;
@@ -350,6 +366,12 @@ export class Game {
         break;
       case 'item':
         this.onItem(m);
+        break;
+      case 'dig':
+        this.applyDig(m, true);
+        break;
+      case 'blk':
+        this.breakPiece(m.b, true);
         break;
     }
   }
@@ -489,6 +511,7 @@ export class Game {
       for (let s = 0; s < steps && !p.dead; s++) {
         p.pos.addScaledVector(p.dir, step);
         if (pointBlocked(this.world, p.pos.x, p.pos.y, p.pos.z)) {
+          if (p.w === 'blaster' && this.destructible && this.botAuthority(p.owner)) this.chipBlock(p.pos);
           this.killProjectile(p);
           this.fx.impact(p.pos, p.color);
           if (p.w === 'rocket') this.explodeRocket(p, p.pos, null);
@@ -550,6 +573,12 @@ export class Game {
     const now = performance.now();
     const color = this.players.get(p.owner)?.color || '#ff8c1a';
     this.fx.explosion(pos.clone(), color, 1);
+    // The rocket's owner decides the crater so every client digs the same hole
+    if (this.destructible && this.botAuthority(p.owner)) {
+      const m = { t: 'dig', x: r2(pos.x), y: r2(pos.y), z: r2(pos.z), r: 5 };
+      this.net.send(m);
+      this.applyDig(m, true);
+    }
     this.sfx.play('explode', this.volAt(pos));
     const w = WEAPONS.rocket;
     const me = this.me;
@@ -569,6 +598,49 @@ export class Game {
         if (d < w.splash) this.damageBot(k.id, w.splashDmg * (1 - d / w.splash), p.owner, 'rocket', now);
       }
     }
+  }
+
+  // ---------- destructible terrain ----------
+
+  applyDig(m, fx) {
+    const x = +m.x, y = +m.y, z = +m.z, r = Math.min(8, +m.r || 5);
+    if (![x, y, z].every(Number.isFinite)) return;
+    if (this.digs.length < 3000) this.digs.push({ t: 'dig', x, y, z, r });
+    const gone = this.world.carve(x, y, z, r);
+    if (fx) this.debris(gone);
+    // Anything standing in the new hole drops into it
+    for (const k of this.karts.values()) if (k.local || k.bot) k.onGround = false;
+  }
+
+  /** Blaster bolts chip blocks; the shooter counts hits and breaks the block for everyone. */
+  chipBlock(pos) {
+    const b = this.world.pieceAt(pos.x, pos.y, pos.z);
+    if (!b) return;
+    const hits = (this.blockHits.get(b.id) || 0) + 1;
+    this.blockHits.set(b.id, hits);
+    if (hits >= 4) {
+      this.net.send({ t: 'blk', b: b.id });
+      this.breakPiece(b.id, true);
+    }
+  }
+
+  breakPiece(id, fx) {
+    const gone = this.world.destroy(+id);
+    if (fx) this.debris(gone);
+  }
+
+  debris(pieces) {
+    if (!pieces.length) return;
+    const v = new THREE.Vector3();
+    for (const b of pieces.slice(0, 12)) {
+      const at = new THREE.Vector3(b.cx, b.cy, b.cz);
+      for (let i = 0; i < 5; i++) {
+        v.set(Math.random() - 0.5, Math.random() * 0.8 + 0.3, Math.random() - 0.5).multiplyScalar(10);
+        this.fx.spawn({ color: b.color, pos: at, vel: v, life: 0.9 + Math.random() * 0.5, size: 0.4 + Math.random() * 0.4, gravity: 26 });
+      }
+      this.fx.puff(at, '#b8a88f', 1.2);
+    }
+    this.sfx.play('bump', this.volAt(new THREE.Vector3(pieces[0].cx, pieces[0].cy, pieces[0].cz)));
   }
 
   damageMe(dmg, by, weapon, now, dir) {
@@ -648,7 +720,7 @@ export class Game {
       for (const k of local) {
         if (!k.alive) continue;
         const dx = k.pos.x - it.x, dz = k.pos.z - it.z;
-        if (dx * dx + dz * dz > 2.8 * 2.8 || k.pos.y > 4) continue;
+        if (dx * dx + dz * dz > 2.8 * 2.8 || k.pos.y - this.world.groundAt(it.x, it.z) > 4) continue;
         if (it.type === 'health' && k.hp >= k.maxHp) continue;
         if (this.net.isHost) this.hostGrab(it.id, k.id);
         else {
@@ -763,10 +835,10 @@ export class Game {
     for (const it of this.items.values()) {
       it.mesh.visible = it.active;
       it.mesh.rotation.y += dt * 2;
-      it.mesh.position.y = 1.6 + Math.sin(now * 0.003 + it.id) * 0.25;
+      it.mesh.position.y = this.world.groundAt(it.x, it.z) + 1.6 + Math.sin(now * 0.003 + it.id) * 0.25;
     }
     for (const c of this.world.padMeshes) {
-      c.position.y = 0.9 + ((now * 0.002) % 1) * 1.5;
+      c.position.y = c.userData.base + 0.9 + ((now * 0.002) % 1) * 1.5;
     }
     this.fx.update(dt);
     this.sendSnapshot(now);

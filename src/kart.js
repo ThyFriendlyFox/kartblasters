@@ -243,16 +243,28 @@ export class Kart {
     this.vel.x = nf.x * vF + latX;
     this.vel.z = nf.z * vF + latZ;
 
+    // Slopes: roll down hills and into craters
+    const ground = (x, z) => world.groundAt(x, z);
+    if (world.terrain && this.onGround) {
+      const gx = (ground(this.pos.x + 0.8, this.pos.z) - ground(this.pos.x - 0.8, this.pos.z)) / 1.6;
+      const gz = (ground(this.pos.x, this.pos.z + 0.8) - ground(this.pos.x, this.pos.z - 0.8)) / 1.6;
+      this.vel.x -= gx * 22 * dt;
+      this.vel.z -= gz * 22 * dt;
+    }
+
     // Vertical
+    const wasGround = this.onGround;
     this.vel.y -= GRAVITY * dt;
     this.pos.addScaledVector(this.vel, dt);
-    if (this.pos.y <= 0) {
-      if (!this.onGround && this.vel.y < -12) ev.impact = Math.max(ev.impact, -this.vel.y * 0.4);
-      this.pos.y = 0;
+    const gy = ground(this.pos.x, this.pos.z);
+    if (this.pos.y <= gy || (wasGround && this.vel.y <= 0 && this.pos.y - gy < 0.5)) {
+      // Landed, or following the ground down a gentle slope
+      if (!wasGround && this.vel.y < -12) ev.impact = Math.max(ev.impact, -this.vel.y * 0.4);
+      this.pos.y = gy;
       this.vel.y = 0;
       this.onGround = true;
     } else {
-      this.onGround = this.pos.y < 0.05;
+      this.onGround = this.pos.y < gy + 0.05;
     }
 
     // Jump pads
@@ -262,7 +274,7 @@ export class Kart {
         const dx = this.pos.x - p.x, dz = this.pos.z - p.z;
         if (dx * dx + dz * dz < p.r * p.r) {
           this.vel.y = 19;
-          this.pos.y = 0.1;
+          this.pos.y += 0.1;
           this.onGround = false;
           this.padCooldown = 0.5;
           ev.jumped = true;
@@ -355,8 +367,23 @@ export class Kart {
     for (const w of this.wheels) w.rotation.x = this.wheelSpin;
     for (const p of this.frontPivots) p.rotation.y = this.steerVis * 0.45;
     // Lean into turns
-    this.body.rotation.z = -this.steerVis * Math.min(1, Math.abs(vF) / 25) * 0.07;
-    this.body.rotation.x = this.pos.y > 0.05 ? -0.12 : 0;
+    // Tilt to match the ground (hills and craters)
+    let pitch = 0, roll = 0;
+    const w = this.world;
+    const gy = w ? w.groundAt(this.pos.x, this.pos.z) : 0;
+    if (w?.terrain && this.pos.y < gy + 0.3) {
+      const r = this.rightVec || (this.rightVec = fwd.clone());
+      r.set(Math.cos(this.heading), 0, -Math.sin(this.heading));
+      const ahead = w.groundAt(this.pos.x + fwd.x * 1.4, this.pos.z + fwd.z * 1.4) - w.groundAt(this.pos.x - fwd.x * 1.4, this.pos.z - fwd.z * 1.4);
+      const left = w.groundAt(this.pos.x + r.x * 1.1, this.pos.z + r.z * 1.1) - w.groundAt(this.pos.x - r.x * 1.1, this.pos.z - r.z * 1.1);
+      pitch = -Math.atan(ahead / 2.8);
+      roll = Math.atan(left / 2.2);
+    }
+    this.body.rotation.order = 'YXZ';
+    this.tiltP = (this.tiltP || 0) + (pitch - (this.tiltP || 0)) * Math.min(1, dt * 12);
+    this.tiltR = (this.tiltR || 0) + (roll - (this.tiltR || 0)) * Math.min(1, dt * 12);
+    this.body.rotation.z = -this.steerVis * Math.min(1, Math.abs(vF) / 25) * 0.07 + this.tiltR;
+    this.body.rotation.x = this.pos.y > gy + 0.05 ? -0.12 : this.tiltP;
     this.turret.rotation.y = this.aimYaw;
     this.barrel.rotation.x = -this.aimPitch;
     const shielded = this.local || this.bot ? now < this.shieldUntil : this.shielded;

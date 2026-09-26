@@ -33,7 +33,7 @@ export class BotBrain {
     const h = this.world.half - 12;
     for (;;) {
       const x = (Math.random() * 2 - 1) * h, z = (Math.random() * 2 - 1) * h;
-      if (!pointBlocked(this.world, x, 1, z, 3)) return { x, z };
+      if (!pointBlocked(this.world, x, this.world.groundAt(x, z) + 1, z, 3)) return { x, z };
     }
   }
 
@@ -91,7 +91,8 @@ export class BotBrain {
     // Obstacle avoidance feelers
     const probe = (ang, dist) => {
       const a = bot.heading + ang;
-      return pointBlocked(world, bot.pos.x + Math.sin(a) * dist, 1, bot.pos.z + Math.cos(a) * dist, 1.2);
+      const x = bot.pos.x + Math.sin(a) * dist, z = bot.pos.z + Math.cos(a) * dist;
+      return pointBlocked(world, x, Math.max(world.groundAt(x, z), bot.pos.y) + 1, z, 1.2);
     };
     const leftBlocked = probe(0.45, 7) || probe(0.2, 11);
     const rightBlocked = probe(-0.45, 7) || probe(-0.2, 11);

@@ -23,13 +23,26 @@ Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no ga
 | --- | --- | --- |
 | Orange Loop | Race | Classic orange plastic track on stands: loop, green helix, jump |
 | Neon Highway | Race | Floating sky city at night: corkscrew, loop, wave section, two jumps |
+| Mega Loop Canyon | Race | Desert stunt run: giant loop, double loop, big jump |
+| Volcano Spiral | Race | Double helix climbing round a volcano, steep drop into a mega loop |
 | Stadium | Battle | Walled arena with cover, jump pads, rocket/health/boost pickups |
+| Crater Field | Battle | Rolling hills with brick forts and stone pillars |
+
+### Destructible terrain (battle)
+
+Tick **💣 Destructible terrain** when hosting a battle (on by default). Then:
+
+- rockets blast craters into the ground, and cars roll down into them
+- walls, crates, barriers and tire stacks are built from blocks: four blaster hits or one rocket knocks a block out, and anything stacked on top collapses
+
+Everyone sees the same holes. Craters are carved so the result doesn't depend on the order messages arrive in, and players who join mid-game get the full damage history.
 
 ## Play with a friend
 
 1. Player 1 picks a car, the mode and the map, then clicks **Create room** and **Copy invite link** at the top of the screen.
 2. Player 2 opens the link (or types the 5-letter code), picks a car and clicks **Join room**.
-3. In race mode the host presses **Enter** to start the countdown. Until then everyone can free-drive.
+3. In race mode everyone free-drives in the lobby until the host clicks **Start race** (or presses Enter). That starts a countdown for everyone at once.
+4. After the race, everyone sees the same results screen, and the host can start the next race. Anyone who joins mid-race spectates the leader and races in the next one.
 
 ### Race controls
 
