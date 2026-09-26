@@ -34,7 +34,7 @@ export class Sfx {
     }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
-    const ctx = (this.ctx = new AC());
+    const ctx = (this.ctx = new AC({ latencyHint: 'interactive' }));
     this.master = ctx.createGain();
     this.master.gain.value = this.muted ? 0 : 0.45;
     this.master.connect(ctx.destination);
@@ -95,9 +95,14 @@ export class Sfx {
       src.start();
       this.scrFilter = bp;
     }
+    // Only touch the params when the level really changes (see engine())
+    if (Math.abs(level - (this.scrLevel ?? -1)) < 0.04 && !(level === 0 && this.scrLevel !== 0)) return;
+    this.scrLevel = level;
     const t = this.ctx.currentTime;
-    this.scr.gain.setTargetAtTime(level * 0.16, t, 0.05);
-    this.scrFilter.frequency.setTargetAtTime(2200 + level * 900 + Math.random() * 300, t, 0.05);
+    for (const [param, v] of [[this.scr.gain, level * 0.16], [this.scrFilter.frequency, 2200 + level * 900 + Math.random() * 300]]) {
+      param.cancelScheduledValues(t);
+      param.setTargetAtTime(v, t, 0.05);
+    }
   }
 
   setMuted(m) {
@@ -111,11 +116,13 @@ export class Sfx {
   engine(dt, speedNorm, throttle, boosting, on) {
     if (!this.eng) return;
     const { rpm, load } = this.gearbox.update(dt, Math.abs(speedNorm), throttle, this.engineSpec, boosting);
-    const p = this.eng.parameters, t = this.ctx.currentTime;
-    p.get('rpm').setTargetAtTime(rpm, t, 0.03);
-    p.get('load').setTargetAtTime(load, t, 0.05);
+    // Plain values: the worklet smooths them. (Scheduling an automation event
+    // every frame piles up on the audio thread and makes all sound lag.)
+    const p = this.eng.parameters;
+    p.get('rpm').value = rpm;
+    p.get('load').value = load;
     // Kept well under the effects and music
-    p.get('gain').setTargetAtTime(on ? 0.1 + 0.08 * load : 0, t, 0.1);
+    p.get('gain').value = on ? 0.1 + 0.08 * load : 0;
   }
 
   tone(type, f0, f1, dur, vol) {

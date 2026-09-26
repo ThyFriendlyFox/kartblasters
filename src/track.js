@@ -681,13 +681,13 @@ export class Track extends Path {
   }
 
   /**
-   * The solid divider between the two roads after they part (and before they
-   * meet again): a hazard-striped island with a rounded nose at the gore.
+   * The divider between the two roads after they part (and before they meet
+   * again): a narrow hazard-striped wall with a rounded nose at the gore.
    */
   buildSplitIsland(scene, theme, br, z) {
     const fm = Path.newFrame(), fb = Path.newFrame();
     const H = 2.4, e = this.hw + 0.05;
-    const A = [], B = [], NA = [], NB = [];
+    const A = [], B = [], NA = [], NB = [], gap = [];
     for (let k = 0; k <= 60; k += 2) {
       this.frame(z.gs + z.dir * k, fm);
       br.path.frame(z.bs + z.dir * k, fb);
@@ -695,8 +695,15 @@ export class Track extends Path {
       const a = fm.P.clone().addScaledVector(fm.R, br.side * e);
       const b2 = fb.P.clone().addScaledVector(fb.R, -br.side * e);
       if (k > 0 && a.distanceTo(b2) > 24) break;
-      A.push(a);
-      B.push(b2);
+      // Stop once one road climbs or dives away: no slab between two levels
+      if (Math.abs(b2.clone().sub(a).dot(fm.N)) > 1.2) break;
+      // A narrow wall down the middle of the gap, not a slab filling it
+      const mid = a.clone().lerp(b2, 0.5), u = b2.clone().sub(a);
+      gap.push(u.length());
+      const half = Math.min(u.length() / 2, 1.2);
+      u.normalize();
+      A.push(mid.clone().addScaledVector(u, -half));
+      B.push(mid.clone().addScaledVector(u, half));
       NA.push(fm.N.clone());
       NB.push(fb.N.clone());
     }
@@ -732,7 +739,7 @@ export class Track extends Path {
     nose.position.copy(A[0]).lerp(B[0], 0.5).addScaledVector(NA[0], H / 2 - 0.2);
     nose.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), NA[0]);
     scene.add(nose);
-    z.island = { A, B, NA, NB };
+    z.island = { A, B, NA, NB, gap };
   }
 
   /**
@@ -744,7 +751,7 @@ export class Track extends Path {
     const isl = br.fork.island;
     if (!isl) return;
     // Stand it where the divider is wide enough to read as a central pier
-    let i = isl.A.findIndex((a, j) => a.distanceTo(isl.B[j]) >= 5);
+    let i = isl.gap.findIndex((w) => w >= 5);
     if (i < 0) i = Math.min(3, isl.A.length - 1);
     const k = i * 2;
     const fm = Path.newFrame(), fb = Path.newFrame();
@@ -775,7 +782,7 @@ export class Track extends Path {
     const mid = fm.P.clone().addScaledVector(fm.R, br.side * this.hw).lerp(fb.P.clone().addScaledVector(fb.R, -br.side * this.hw), 0.5);
     const outB = fb.P.clone().addScaledVector(fb.R, br.side * (this.hw + 0.9));
     const tops = [];
-    const pier = THREE.MathUtils.clamp(isl.A[i].distanceTo(isl.B[i]) - 1, 1.2, 4);
+    const pier = THREE.MathUtils.clamp(isl.gap[i] - 1, 1.2, 4);
     // A level gantry: upright posts with their tops at one height, even when
     // one lane has already started to climb or dive
     const UP = new THREE.Vector3(0, 1, 0);
@@ -1043,7 +1050,7 @@ function buildEnvironment(scene, theme, track) {
         }
       }
     });
-    placeProps(track, 90, 60, 700, (x, z) => {
+    placeProps(track, 90, 24 + track.hw + 6, 700, (x, z) => {
       const h = 40 + Math.random() * 160, w = 14 + Math.random() * 20;
       const t = winTex.clone();
       t.needsUpdate = true;
@@ -1152,7 +1159,7 @@ function buildDaylight(scene, theme, track) {
   if (theme === 'toy') {
     const leaf = new THREE.MeshLambertMaterial({ color: '#2f7a34' });
     const trunk = new THREE.MeshLambertMaterial({ color: '#6b4a2b' });
-    placeProps(track, 26, 140, 420, (x, z) => {
+    placeProps(track, 26, 49, 420, (x, z) => {
       const s = 4 + Math.random() * 5;
       const t = new THREE.Mesh(new THREE.ConeGeometry(s, s * 3, 7), leaf);
       t.position.set(x, s * 1.5 + 3, z);
@@ -1165,7 +1172,7 @@ function buildDaylight(scene, theme, track) {
   } else if (theme === 'desert') {
     const cactus = new THREE.MeshLambertMaterial({ color: '#3f8f3a' });
     const rock = new THREE.MeshLambertMaterial({ color: '#b5653a' });
-    placeProps(track, 40, 120, 440, (x, z) => {
+    placeProps(track, 40, 42, 440, (x, z) => {
       if (Math.random() < 0.55) {
         const h = 6 + Math.random() * 6;
         const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1, h, 8), cactus);
@@ -1217,7 +1224,7 @@ function buildDaylight(scene, theme, track) {
       }
       track.smokeAt = new THREE.Vector3(v.x, h, v.z);
     }
-    placeProps(track, 34, 120, 440, (x, z) => {
+    placeProps(track, 34, 42, 440, (x, z) => {
       const h = 10 + Math.random() * 30;
       const m = new THREE.Mesh(new THREE.ConeGeometry(3 + Math.random() * 5, h, 5), rock);
       m.position.set(x, h / 2, z);
@@ -1245,20 +1252,24 @@ function trackCenter(track) {
   return c.divideScalar(track.n).setY(0);
 }
 
-/** Scatter props around the track, avoiding the track footprint. */
-function placeProps(track, count, minDist, spread, place) {
+/**
+ * Scatter props around the track. `clear` is how far a prop's centre must stay
+ * from the centreline of the main road and of every alternate route.
+ */
+function placeProps(track, count, clear, spread, place) {
   const c = trackCenter(track);
+  const paths = [track, ...(track.branches || []).map((b) => b.path)];
   let tries = 0, placed = 0;
   while (placed < count && tries++ < count * 30) {
     const x = c.x + (Math.random() - 0.5) * spread * 2;
     const z = c.z + (Math.random() - 0.5) * spread * 2;
     let ok = true;
-    for (let i = 0; i < track.n; i += 4) {
-      const dx = track.P[i * 3] - x, dz = track.P[i * 3 + 2] - z;
-      if (dx * dx + dz * dz < (minDist * 0.35) ** 2) {
-        ok = false;
-        break;
+    for (const p of paths) {
+      for (let i = 0; ok && i < p.n; i += 2) {
+        const dx = p.P[i * 3] - x, dz = p.P[i * 3 + 2] - z;
+        if (dx * dx + dz * dz < clear * clear) ok = false;
       }
+      if (!ok) break;
     }
     if (ok) {
       place(x, z);

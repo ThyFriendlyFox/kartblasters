@@ -40,6 +40,11 @@ class EngineProcessor extends AudioWorkletProcessor {
     this.drive = 1;
     this.pop = 0;
     this.lastLoad = 0;
+    // Smoothed copies of the controls: the game just sets .value each frame
+    // (no automation events piling up) and the smoothing happens here
+    this.rpmS = 900;
+    this.loadS = 0;
+    this.gainS = 0;
     this.setEngine({ fire: [0, 360], amp: [1, 1], res: 120, res2: 300, body: 1 });
     this.port.onmessage = (e) => this.setEngine(e.data);
   }
@@ -61,7 +66,11 @@ class EngineProcessor extends AudioWorkletProcessor {
   }
   process(inputs, outputs, params) {
     const out = outputs[0][0];
-    const rpm = params.rpm[0], load = params.load[0], gain = params.gain[0];
+    const blk = out.length / sampleRate;
+    this.rpmS += (params.rpm[0] - this.rpmS) * (1 - Math.exp(-blk / 0.03));
+    this.loadS += (params.load[0] - this.loadS) * (1 - Math.exp(-blk / 0.05));
+    this.gainS += (params.gain[0] - this.gainS) * (1 - Math.exp(-blk / 0.1));
+    const rpm = this.rpmS, load = this.loadS, gain = this.gainS;
     const degPerSample = (rpm / 60) * 360 / sampleRate;
     // Exhaust resonances shift a little with revs
     const [a1, a2, ag] = this.coeffs(this.resHz * (0.85 + rpm / 20000), 0.985);
