@@ -121,7 +121,7 @@ export class TrackTurtle {
   }
 
   /** Barrel-roll the road around its own centerline. */
-  corkscrew(len, turns = 1, dir = 1, radius = 7) {
+  corkscrew(len, turns = 1, dir = 1, radius = 3) {
     const p0 = this.pos.clone(), d = this.dir(), r = this.right();
     const r0 = this.roll;
     const n = Math.ceil(len / STEP);
@@ -264,7 +264,7 @@ export const TRACKS = {
       const t = new TrackTurtle(0, 26, 0, 0, this.width).paint('#1f4bff');
       t.straight(36).boost(12).straight(20);
       t.turn(55, 55).turn(-55, 55);
-      t.paint('#b400ff').corkscrew(90, 1).paint('#1f4bff');
+      t.paint('#b400ff').corkscrew(90, 1, 1, 7).paint('#1f4bff');
       t.straight(20);
       t.turn(-120, 38, -8);
       t.straight(8).boost(12).straight(14, 2.5).gap(26, -4).straight(26);
