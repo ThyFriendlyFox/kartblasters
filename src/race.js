@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Track, Path } from './track.js';
 import { buildCar, CARS, CAR_IDS } from './cars.js';
-import { Fx } from './fx.js';
+import { Fx, SkidMarks } from './fx.js';
 import { BOT_NAMES } from './bots.js';
 import { Hud } from './hud.js';
 import { COLORS } from './game.js';
@@ -25,46 +25,12 @@ function fmtTime(ms) {
   return `${m}:${String(s).padStart(2, '0')}.${String(c).padStart(2, '0')}`;
 }
 
+const DRAFT_RANGE = 24; // how far behind a car its slipstream reaches
+const DRAFT_TOP = 0.1; // top speed gain at full draft
+
 const _m = new THREE.Matrix4();
 const _r = new THREE.Vector3();
 
-/** Ring buffer of tire-mark quads laid on the road while cars drift. */
-class SkidMarks {
-  constructor(scene, max = 3000) {
-    this.max = max;
-    this.i = 0;
-    this.count = 0;
-    this.pos = new Float32Array(max * 18);
-    this.geo = new THREE.BufferGeometry();
-    this.attr = new THREE.BufferAttribute(this.pos, 3);
-    this.attr.setUsage(THREE.DynamicDrawUsage);
-    this.geo.setAttribute('position', this.attr);
-    this.geo.setDrawRange(0, 0);
-    const mesh = new THREE.Mesh(
-      this.geo,
-      new THREE.MeshBasicMaterial({ color: '#0d0d10', transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, side: THREE.DoubleSide }),
-    );
-    mesh.frustumCulled = false;
-    mesh.renderOrder = 1;
-    scene.add(mesh);
-  }
-
-  add(a, b, right, w = 0.24) {
-    if (a.distanceToSquared(b) > 25) return; // teleported (respawn / fork), skip
-    const q = [
-      a.x - right.x * w, a.y - right.y * w, a.z - right.z * w,
-      a.x + right.x * w, a.y + right.y * w, a.z + right.z * w,
-      b.x + right.x * w, b.y + right.y * w, b.z + right.z * w,
-      b.x - right.x * w, b.y - right.y * w, b.z - right.z * w,
-    ];
-    const o = this.i * 18;
-    for (const [k, v] of [0, 1, 2, 0, 2, 3].entries()) this.pos.set(q.slice(v * 3, v * 3 + 3), o + k * 3);
-    this.i = (this.i + 1) % this.max;
-    this.count = Math.min(this.max, this.count + 1);
-    this.geo.setDrawRange(0, this.count * 6);
-    this.attr.needsUpdate = true;
-  }
-}
 const _x = new THREE.Vector3();
 const _v = new THREE.Vector3();
 
@@ -111,6 +77,8 @@ export class RaceCar {
     this.flipT = 0;
     this.driftT = 0;
     this.bodyYaw = 0;
+    this.draftT = 0; // time spent in another car's slipstream
+    this.drafting = false;
 
     this.hasNet = false;
     this.net = null;
@@ -180,6 +148,19 @@ export class RaceCar {
     this.wvel.copy(this.fwd).multiplyScalar(this.v);
   }
 
+  /** The car whose slipstream we're in (close behind it, lined up, both at speed), if any. */
+  slipstream(path, others) {
+    if (this.v < 28) return null;
+    for (const o of others) {
+      if (o === this || o.route !== this.route || o.flying || o.crashT > 0 || o.v < 20 || !o.root.visible) continue;
+      const gap = path.delta(this.s, o.s);
+      if (gap < 2.5 || gap > DRAFT_RANGE) continue;
+      // The pocket of still air is narrow up close and widens a little behind
+      if (Math.abs(o.d - this.d) < 1.6 + gap * 0.05) return o;
+    }
+    return null;
+  }
+
   yawMax(spd) {
     return Math.min(2.2, (GRIPC * this.stats.grip) / Math.max(spd, 1)) * (this.drifting ? 1.6 : 1) * Math.min(1, spd / 5);
   }
@@ -204,16 +185,23 @@ export class RaceCar {
     if (!this.flying) {
       let path = track.pathOf(this.route);
       path.frame(this.s, fr);
+      // Drafting: tuck in close behind a car ahead and its slipstream pulls
+      // you along (more top speed, quicker acceleration, a trickle of nitro)
+      const tow = this.slipstream(path, others);
+      this.draftT = tow ? Math.min(1.2, this.draftT + dt) : Math.max(0, this.draftT - dt * 2.5);
+      const draft = clamp((this.draftT - 0.25) / 0.6, 0, 1);
+      this.drafting = draft > 0;
+      if (draft > 0 && !this.boosting) this.boost = Math.min(1, this.boost + dt * 0.12 * draft);
       if (fr.boost) {
         if (this.padT <= 0) ev.pad = true;
         this.padT = 1.3;
       }
       this.padT -= dt;
       const padded = this.padT > 0;
-      const top = BASE_TOP * st.speed * this.topMul * (this.boosting ? 1 + 0.3 * st.boost : 1) * (padded ? 1.3 : 1);
+      const top = BASE_TOP * st.speed * this.topMul * (this.boosting ? 1 + 0.3 * st.boost : 1) * (padded ? 1.3 : 1) * (1 + DRAFT_TOP * draft);
 
       if (input.throttle > 0) {
-        if (this.v < top) this.v += 30 * st.accel * (1 - 0.5 * Math.max(0, this.v) / top) * input.throttle * dt * (this.boosting ? 1 + st.boost : padded ? 2 : 1);
+        if (this.v < top) this.v += 30 * st.accel * (1 - 0.5 * Math.max(0, this.v) / top) * input.throttle * dt * (this.boosting ? 1 + st.boost : padded ? 2 : 1) * (1 + 0.6 * draft);
       } else if (input.throttle < 0) {
         this.v -= (this.v > 0 ? 55 : 22) * dt;
         this.v = Math.max(this.v, -16);
@@ -1131,6 +1119,7 @@ export class RaceGame {
       const open = this.phase === 'lobby' || this.phase === 'results';
       c.updateVisual(dt, open || c.inRace || (c.local && this.phase !== 'spectate'));
       this.driftFx(c);
+      this.draftFx(c);
     }
     this.sfx.screech(me.drifting && !me.flying ? Math.min(1, 0.5 + me.driftT) : 0);
 
@@ -1196,6 +1185,15 @@ export class RaceGame {
       this.hud.center('SLOPPY LANDING', 'finish your trick before you land', 1300);
       this.sfx.play('hurt', 0.5);
     }
+  }
+
+  /** Wind lines streaming past a car that's drafting. */
+  draftFx(c) {
+    if (!c.drafting || c.flying || !c.root.visible || Math.random() > 0.7) return;
+    const right = _r.crossVectors(c.fwd, c.up).normalize();
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const p = new THREE.Vector3().copy(c.wpos).addScaledVector(c.fwd, 1 + Math.random() * 3).addScaledVector(right, side * (1.2 + Math.random() * 0.8)).addScaledVector(c.up, 0.4 + Math.random() * 1.4);
+    this.fx.streak(p, c.fwd, new THREE.Vector3().copy(c.fwd).multiplyScalar(c.v * 0.55));
   }
 
   /** Tire smoke, skid marks and sparks that heat up the longer you hold a drift. */
@@ -1359,6 +1357,7 @@ export class RaceGame {
     set('rLap', `${clamp(me.lap, 1, this.laps)}/${this.laps}`);
     set('rTime', this.phase === 'racing' || this.phase === 'results' ? fmtTime(me.finished || (this.phase === 'racing' ? now - this.goAt : NaN)) : '0:00.00');
     set('speed', `${Math.round(Math.abs(me.v) * 3.2)}`);
+    document.getElementById('draft').classList.toggle('on', !!me.drafting && !me.flying && this.phase !== 'spectate');
     set('rKeys', [...me.keys].map((id) => `🔑 ${this.track.branches.find((b) => b.lock === id)?.name || 'KEY'}`).join('  '));
     hud.set('rb', document.getElementById('boostFill'), 'width', `${Math.round(me.boost * 100)}%`);
 

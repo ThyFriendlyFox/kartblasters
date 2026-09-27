@@ -3,6 +3,7 @@ import * as THREE from 'three';
 const sphereGeo = new THREE.SphereGeometry(1, 12, 8);
 const cubeGeo = new THREE.BoxGeometry(1, 1, 1);
 const MAX_PARTS = 500;
+const _z = new THREE.Vector3(0, 0, 1);
 
 /** Tiny particle system: every particle is a mesh with its own fading material. */
 export class Fx {
@@ -72,6 +73,15 @@ export class Fx {
     this.spawn({ color, pos, vel: v, life: 0.25, size: 0.12, gravity: 20, additive: true });
   }
 
+  /** A thin wind streak along `dir` (slipstream lines). */
+  streak(pos, dir, vel, len = 2.2) {
+    this.spawn({ color: '#ffffff', pos, vel, life: 0.22, size: 1, opacity: 0.55 });
+    const m = this.parts[this.parts.length - 1].mesh;
+    m.rotation.set(0, 0, 0);
+    m.quaternion.setFromUnitVectors(_z, dir);
+    m.scale.set(0.05, 0.05, len);
+  }
+
   update(dt) {
     for (let i = this.parts.length - 1; i >= 0; i--) {
       const p = this.parts[i];
@@ -85,5 +95,43 @@ export class Fx {
       if (p.grow) p.mesh.scale.addScalar(p.grow * dt);
       p.mesh.material.opacity = p.opacity * (p.life / p.max);
     }
+  }
+}
+
+/** Ring buffer of tire-mark quads laid on the road while cars drift. */
+export class SkidMarks {
+  constructor(scene, max = 3000) {
+    this.max = max;
+    this.i = 0;
+    this.count = 0;
+    this.pos = new Float32Array(max * 18);
+    this.geo = new THREE.BufferGeometry();
+    this.attr = new THREE.BufferAttribute(this.pos, 3);
+    this.attr.setUsage(THREE.DynamicDrawUsage);
+    this.geo.setAttribute('position', this.attr);
+    this.geo.setDrawRange(0, 0);
+    const mesh = new THREE.Mesh(
+      this.geo,
+      new THREE.MeshBasicMaterial({ color: '#0d0d10', transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, side: THREE.DoubleSide }),
+    );
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 1;
+    scene.add(mesh);
+  }
+
+  add(a, b, right, w = 0.24) {
+    if (a.distanceToSquared(b) > 25) return; // teleported (respawn / fork), skip
+    const q = [
+      a.x - right.x * w, a.y - right.y * w, a.z - right.z * w,
+      a.x + right.x * w, a.y + right.y * w, a.z + right.z * w,
+      b.x + right.x * w, b.y + right.y * w, b.z + right.z * w,
+      b.x - right.x * w, b.y - right.y * w, b.z - right.z * w,
+    ];
+    const o = this.i * 18;
+    for (const [k, v] of [0, 1, 2, 0, 2, 3].entries()) this.pos.set(q.slice(v * 3, v * 3 + 3), o + k * 3);
+    this.i = (this.i + 1) % this.max;
+    this.count = Math.min(this.max, this.count + 1);
+    this.geo.setDrawRange(0, this.count * 6);
+    this.attr.needsUpdate = true;
   }
 }

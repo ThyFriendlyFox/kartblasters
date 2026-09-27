@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { buildArena, pointBlocked } from './arena.js';
 import { Kart } from './kart.js';
 import { CARS, CAR_IDS, carThumbnail, statBarsHTML } from './cars.js';
-import { Fx } from './fx.js';
+import { Fx, SkidMarks } from './fx.js';
 import { BotBrain, BOT_NAMES } from './bots.js';
 import { Hud } from './hud.js';
 import { WEAPONS, SLOTS, MAX_AMMO_MULT, projectileMesh, botPreference } from './weapons.js';
@@ -50,6 +50,7 @@ export class Game {
     this.digs = []; // crater history, replayed for players who join later
     this.blockHits = new Map();
     this.fx = new Fx(this.scene);
+    this.skids = new SkidMarks(this.scene);
 
     this.karts = new Map();
     this.players = new Map();
@@ -481,7 +482,7 @@ export class Game {
     const snap = (k) => [
       k.id, r2(k.pos.x), r2(k.pos.y), r2(k.pos.z), r2(k.vel.x), r2(k.vel.y), r2(k.vel.z),
       r3(k.heading), r3(k.aimYaw), r3(k.aimPitch), Math.round(k.hp), k.alive ? 1 : 0, k.boosting ? 1 : 0,
-      now < k.shieldUntil ? 1 : 0,
+      now < k.shieldUntil ? 1 : 0, k.drifting ? 1 : 0,
     ];
     const e = [snap(this.me)];
     for (const b of this.bots) e.push(snap(b.kart));
@@ -1232,10 +1233,6 @@ export class Game {
       }
       if (this.locked && (this.mouse.left || m?.fire)) this.tryFire(me, me.weapon, now);
       if (this.locked && (this.mouse.right || m?.rocket || this.keys.has('KeyE') || this.keys.has('KeyQ'))) this.tryFire(me, 'rocket', now);
-      if (me.drifting && Math.random() < 0.6) {
-        const f = me.forward(_b);
-        this.fx.spark(_a.set(me.pos.x - f.x * 1.6, 0.2, me.pos.z - f.z * 1.6), '#ffd166');
-      }
     } else if (this.joined && me.respawnAt && now >= me.respawnAt) {
       me.respawnAt = 0;
       this.spawnKart(me);
@@ -1263,7 +1260,11 @@ export class Game {
     for (const k of all) {
       if (k !== me && !k.bot) k.updateRemote(dt, now);
       k.updateVisual(dt, now);
+      this.driftFx(k);
+      this.draftFx(k);
     }
+    this.sfx.screech(me.alive && me.drifting && me.onGround ? Math.min(1, 0.5 + me.driftT) : 0);
+    document.getElementById('draft').classList.toggle('on', me.alive && me.drafting);
 
     this.updateProjectiles(dt, now);
     this.checkPickups(now);
@@ -1290,6 +1291,38 @@ export class Game {
     this.hud.board(this.players, me.id);
     this.hud.scoreboard(this.players, me.id, this.keys.has('Tab'));
     if ((this.mapTick = (this.mapTick || 0) + 1) % 2 === 0) this.hud.minimap(this.world, this.karts, this.items, me);
+  }
+
+  /** Tire smoke, skid marks and sparks that heat up the longer a drift is held (as in race mode). */
+  driftFx(k) {
+    if (!k.alive || !k.drifting || !k.onGround) {
+      k.skid = null;
+      return;
+    }
+    const f = k.forward(_b);
+    const rx = f.z, rz = -f.x; // right, flat on the ground
+    const right = new THREE.Vector3(rx, 0, rz);
+    const wheels = [-1, 1].map((side) => {
+      const x = k.pos.x - f.x * 1.35 + rx * side * 1.05, z = k.pos.z - f.z * 1.35 + rz * side * 1.05;
+      return new THREE.Vector3(x, this.world.groundAt(x, z) + 0.05, z);
+    });
+    if (k.skid) for (let w = 0; w < 2; w++) this.skids.add(k.skid[w], wheels[w], right);
+    k.skid = wheels;
+    for (const w of wheels) if (Math.random() < 0.6) this.fx.puff(w, '#e2e2e2', 0.55);
+    const t = k.driftT;
+    const col = t < 0.8 ? '#7fdcff' : t < 1.8 ? '#ffb703' : '#ff4fd8';
+    const n = t < 0.8 ? 1 : t < 1.8 ? 2 : 4;
+    for (let i = 0; i < n; i++) this.fx.spark(wheels[i % 2], col);
+  }
+
+  /** Wind lines streaming past a kart that's drafting. */
+  draftFx(k) {
+    if (!k.alive || !k.drafting || Math.random() > 0.7) return;
+    const f = k.forward(new THREE.Vector3());
+    const side = Math.random() < 0.5 ? -1 : 1, off = 1.2 + Math.random() * 0.8, ahead = 1 + Math.random() * 3;
+    const p = new THREE.Vector3(k.pos.x + f.x * ahead + f.z * side * off, k.pos.y + 0.4 + Math.random() * 1.4, k.pos.z + f.z * ahead - f.x * side * off);
+    const v = k.vel.x * f.x + k.vel.z * f.z;
+    this.fx.streak(p, f, f.clone().multiplyScalar(v * 0.55));
   }
 
   kartEvents(k, ev) {
@@ -1323,7 +1356,7 @@ export class Game {
       cam.position.y += (Math.random() - 0.5) * this.shake;
       this.shake *= Math.exp(-8 * dt);
     }
-    const fov = me.boosting ? 84 : 72;
+    const fov = (me.boosting ? 84 : 72) + (me.drifting ? 4 : 0) + (me.drafting ? 3 : 0);
     if (Math.abs(cam.fov - fov) > 0.1) {
       cam.fov += (fov - cam.fov) * Math.min(1, dt * 6);
       cam.updateProjectionMatrix();

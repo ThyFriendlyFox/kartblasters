@@ -451,6 +451,17 @@ label.check small { width: 100%; color: var(--muted); font-weight: 500; padding-
 .swapGrid .carBtn.current:not(.on) { border-color: rgba(255, 255, 255, 0.25); }
 #raceHud .keys { font-family: Inter, system-ui, sans-serif; font-weight: 800; font-size: 14px; color: #ffd000; margin-top: 4px; }
 
+/* ---------- drafting indicator ---------- */
+#draft {
+  position: absolute;
+  left: 50%; bottom: 96px;
+  transform: translateX(-50%) scale(0.9);
+  font-family: Inter, system-ui, sans-serif; font-weight: 900; font-size: 15px; letter-spacing: 2px;
+  color: #eaf6ff; text-shadow: 0 0 10px #4dc3ff, 0 2px 0 rgba(0, 0, 0, 0.5);
+  opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none;
+}
+#draft.on { opacity: 1; transform: translateX(-50%) scale(1); }
+
 /* ---------- battle weapon bar ---------- */
 #weaponBar {
   position: absolute;

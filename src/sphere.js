@@ -218,7 +218,9 @@ export function sphereCourse({
     cork: colors.cork || '#2d7bff',
     helix: colors.helix || '#39d353',
     jump: colors.jump || '#ffd000',
+    roller: colors.roller || '#ff8a1e',
   };
+  const tint = new Array(n).fill(null); // section colour (roller bumps)
   const baseOf = []; // base sample each emitted point came from
   let cur = 0;
   const emit = (p, up, extra = {}) => baseOf.push(cur) && pts.push({ p, roll: 0, gap: false, boost: false, kick: false, loop: false, norail: false, color: col.road, up, ...extra });
@@ -268,6 +270,7 @@ export function sphereCourse({
     let p = p0.addScaledVector(R, lat[i]);
     let up = N.clone();
     const extra = norail[i] ? { norail: true } : {};
+    if (tint[i]) extra.color = tint[i];
 
     // Corkscrew: a full barrel roll around a small tube along the line
     for (const c of corkAt) {
@@ -462,6 +465,59 @@ export function sphereCourse({
   // Jumps on the floor (flight uses real gravity), corkscrews on the walls
   jumpAt = pick(jumps, (i, score) => (score ? F.N[i].y : F.N[i].y > 0.5), 8, 20, 150);
   corkAt = pick(corkscrews, (i, score) => (score ? 1 - Math.abs(F.N[i].y) : Math.abs(F.N[i].y) < 0.6), 4, CORK + 4, 150);
+
+  // 6. Hills and rollers in the stretches that are left. They fade out near
+  // crossings, so over/unders keep their clearance and junctions stay level.
+  const calm = new Float32Array(n).fill(1);
+  for (const c of crossings) {
+    for (const j of [c.i, c.j]) {
+      for (let d = -3 * sigma; d <= 3 * sigma; d++) calm[at(j + d)] = Math.min(calm[at(j + d)], 1 - Math.exp(-(d * d) / (2 * sigma * sigma)));
+    }
+  }
+  // Only real features block them (crossings are handled by `calm`)
+  const fbusy = new Uint8Array(n);
+  const fclaim = (i, before, after) => {
+    for (let d = -before; d <= after; d++) fbusy[at(i + d)] = 1;
+  };
+  fclaim(0, 40, 40);
+  for (const i0 of loopAt) fclaim(i0, LOOP_BLEND + 2, LOOP_BLEND + 2);
+  for (const h of helixAt) fclaim(h.i, HX_REACH, HX_REACH);
+  for (const j of jumpAt) fclaim(j, 10, 22);
+  for (const c of corkAt) fclaim(c, 4, CORK + 4);
+  for (const c of chordAt) {
+    fclaim(c.a, 6, FL + 14);
+    fclaim(c.b, FL + 14, 6);
+  }
+  for (let i = 0; i < n; i++) if (norail[i]) fclaim(i, 2, 2);
+  const runs = [];
+  for (let i = 0; i < n; ) {
+    if (fbusy[i]) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < n && !fbusy[j]) j++;
+    runs.push([i, j - i]);
+    i = j;
+  }
+  let hills = 0, rollers = 0;
+  if (globalThis.SPH_DEBUG) globalThis.SPH_DEBUG.push("runs " + JSON.stringify(runs));
+  runs.forEach(([r0, len], k) => {
+    if (len < 26) return;
+    const hill = len >= 65 && hills <= rollers;
+    const lam = hill ? 55 : 13; // wavelength, samples
+    const A = hill ? 6 : 1.4;
+    const waves = Math.max(1, Math.floor((len - 6) / lam));
+    const span = len - 6;
+    for (let q = 0; q <= span; q++) {
+      const i = at(r0 + 3 + q);
+      const env = ss(Math.min(q, span - q) / (hill ? 14 : 5));
+      off[i] += A * Math.sin((Math.PI * 2 * waves * q) / span) * env * calm[i];
+      if (!hill && env * calm[i] > 0.5) tint[i] = col.roller;
+    }
+    if (hill) hills++;
+    else rollers++;
+  });
   build();
 
   const marks = {};
@@ -491,6 +547,8 @@ export function sphereCourse({
       jumps: jumpAt.length,
       corkscrews: corkAt.length,
       helixes: helixAt.length,
+      hills,
+      rollers,
       chords: chordAt.map((c) => `${c.name} ${Math.round((c.b - c.a) * STEP)}→${Math.round(c.pts.length * STEP)}`),
       center,
       radius,

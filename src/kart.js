@@ -57,6 +57,10 @@ export class Kart {
     this.boost = 1;
     this.boosting = false;
     this.drifting = false;
+    this.driftT = 0;
+    this.bodyYaw = 0;
+    this.draftT = 0; // time spent in another kart's slipstream
+    this.drafting = false;
     this.heat = 0;
     this.overheated = false;
     this.rockets = 2;
@@ -211,19 +215,24 @@ export class Kart {
     let latX = this.vel.x - fwd.x * vF;
     let latZ = this.vel.z - fwd.z * vF;
 
+    // Drifting works like race mode: hold drift while steering at speed to
+    // slide the tail out, and the longer the drift the more nitro it charges
+    this.drifting = input.drift && vF > 8 && this.onGround && Math.abs(input.steer) > 0.1;
+    this.driftT = this.drifting ? this.driftT + dt : 0;
+    const draft = this.slipstream(fwd, vF, others, dt);
+
     this.boosting = input.boost && input.throttle > 0 && this.boost > 0.02;
     if (this.boosting) this.boost = Math.max(0, this.boost - dt * 0.38);
-    else this.boost = Math.min(1, this.boost + dt * 0.12);
+    else this.boost = Math.min(1, this.boost + dt * (this.drifting ? 0.3 : 0.12) + dt * 0.12 * draft);
     if (this.boost <= 0.02) this.boosting = false;
 
-    this.drifting = input.drift && vF > 8 && this.onGround;
     const control = this.onGround ? 1 : 0.25;
 
     // Throttle / brake
     const st = this.stats;
-    const top = (this.boosting ? MAX_SPEED + (BOOST_SPEED - MAX_SPEED) * st.boost : MAX_SPEED) * st.speed;
+    const top = (this.boosting ? MAX_SPEED + (BOOST_SPEED - MAX_SPEED) * st.boost : MAX_SPEED) * st.speed * (1 + 0.1 * draft);
     if (input.throttle > 0) {
-      if (vF < top) vF += (this.boosting ? 62 * st.boost : 34) * st.accel * input.throttle * dt * control;
+      if (vF < top) vF += (this.boosting ? 62 * st.boost : 34) * st.accel * input.throttle * dt * control * (1 + 0.6 * draft);
     } else if (input.throttle < 0) {
       if (vF > 0.5) vF -= 48 * dt * control;
       else if (vF > -REVERSE_SPEED) vF -= 22 * dt * control;
@@ -232,7 +241,7 @@ export class Kart {
       vF = Math.abs(vF) < f ? 0 : vF - Math.sign(vF) * f;
     }
     if (vF > top) vF -= (vF - top) * 2.5 * dt;
-    if (input.drift && this.onGround && !this.drifting) vF *= 1 - 1.5 * dt; // handbrake at low speed
+    if (input.drift && this.onGround && vF <= 8) vF *= 1 - 1.5 * dt; // handbrake at low speed
 
     // Steering scales with speed (can't spin in place)
     const speedFactor = Math.max(-1, Math.min(1, vF / 8));
@@ -320,6 +329,32 @@ export class Kart {
     return ev;
   }
 
+  /**
+   * Drafting: close behind another kart heading the same way, its slipstream
+   * pulls you along. Returns the draft strength (0..1) after a short build-up.
+   */
+  slipstream(fwd, vF, others, dt) {
+    let tow = false;
+    if (vF > 18 && this.onGround) {
+      for (const o of others) {
+        if (o === this || !o.alive) continue;
+        const dx = o.pos.x - this.pos.x, dz = o.pos.z - this.pos.z;
+        const ahead = dx * fwd.x + dz * fwd.z;
+        if (ahead < 2.5 || ahead > 20) continue;
+        if (Math.abs(dx * fwd.z - dz * fwd.x) > 1.6 + ahead * 0.05) continue;
+        const ov = o.vel.x * fwd.x + o.vel.z * fwd.z; // its speed our way
+        if (ov > 14) {
+          tow = true;
+          break;
+        }
+      }
+    }
+    this.draftT = tow ? Math.min(1.2, this.draftT + dt) : Math.max(0, this.draftT - dt * 2.5);
+    const draft = Math.max(0, Math.min(1, (this.draftT - 0.25) / 0.6));
+    this.drafting = draft > 0;
+    return draft;
+  }
+
   setNet(e, now) {
     // e = [id, x, y, z, vx, vy, vz, heading, aimYaw, aimPitch, hp, alive, boosting, shielded]
     const alive = !!e[11];
@@ -333,6 +368,7 @@ export class Kart {
     this.alive = alive;
     this.boosting = !!e[12];
     this.shielded = !!e[13];
+    this.drifting = !!e[14];
     this.netTime = now;
     if (!this.hasNet || (alive && !wasAlive) || this.pos.distanceTo(this.netPos) > 12) {
       this.pos.copy(this.netPos);
@@ -367,12 +403,16 @@ export class Kart {
     this.root.visible = this.alive;
     if (!this.alive) return;
     this.root.position.copy(this.pos);
-    this.body.rotation.y = this.heading;
+    if (!this.local && !this.bot) this.driftT = this.drifting ? this.driftT + dt : 0;
+    // Drifting: swing the tail out hard (as in race mode)
+    const yawTarget = this.drifting ? this.steerVis * 0.65 : 0;
+    this.bodyYaw += (yawTarget - this.bodyYaw) * Math.min(1, dt * (this.drifting ? 7 : 5));
+    this.body.rotation.y = this.heading + this.bodyYaw;
     const fwd = this.forward();
     const vF = this.vel.x * fwd.x + this.vel.z * fwd.z;
     this.wheelSpin += (vF * dt) / 0.45;
     for (const w of this.wheels) w.rotation.x = this.wheelSpin;
-    for (const p of this.frontPivots) p.rotation.y = this.steerVis * 0.45;
+    for (const p of this.frontPivots) p.rotation.y = this.drifting ? -this.steerVis * 0.35 : this.steerVis * 0.45; // counter-steer while drifting
     // Lean into turns
     // Tilt to match the ground (hills and craters)
     let pitch = 0, roll = 0;
@@ -389,7 +429,7 @@ export class Kart {
     this.body.rotation.order = 'YXZ';
     this.tiltP = (this.tiltP || 0) + (pitch - (this.tiltP || 0)) * Math.min(1, dt * 12);
     this.tiltR = (this.tiltR || 0) + (roll - (this.tiltR || 0)) * Math.min(1, dt * 12);
-    this.body.rotation.z = -this.steerVis * Math.min(1, Math.abs(vF) / 25) * 0.07 + this.tiltR;
+    this.body.rotation.z = -this.steerVis * Math.min(1, Math.abs(vF) / 25) * (this.drifting ? 0.14 : 0.07) + this.tiltR;
     this.body.rotation.x = this.pos.y > gy + 0.05 ? -0.12 : this.tiltP;
     this.turret.rotation.y = this.aimYaw;
     this.barrel.rotation.x = -this.aimPitch;

@@ -40,7 +40,7 @@ The menu shows an aerial preview of the selected map with its lap length and a r
 | Canyon Colossus | Race (epic, ~2 min lap) | Stacked stunt park on lattice pillars: roads cross over and under each other, three wall rides, a spiral climb to a high line, two corkscrews, loops and a long plunge |
 | Skyline Spiral | Race (epic, ~2 min lap) | Neon stunt stack: climbing wall ride, loop, rooftop gaps, a corkscrew, two turns up a skyscraper, a dive onto a banked wall-ride descent, double loop and a wall-ride chicane |
 | Chaos Crossing | Race (epic, ~2 min lap) | The two stunt parks tangled together: a Canyon-style main line with roads crossing over and under each other, plus two forks into Skyline-style routes, SKY TOWER (a double spiral climb and a dive back in) and WALL STACK (a stacked, climbing wall-ride hairpin that passes over itself) |
-| Gyrosphere | Race (epic, ~1:30 lap) | A cartoon stadium course on the inside of a giant sphere: no straights, the road winds across the floor, up the walls and upside-down over the ceiling, criss-crossing itself (over/unders plus open through-junctions with no walls). All three kinds of loop: vertical loops, corkscrews and banked helix spirals, plus jumps. Three CHORD routes fork off the wall and cut through the middle of the sphere to another part of the course: LOOP CHORD (a loop in mid-air), TWIST CHORD (a double corkscrew) and SKY CHORD |
+| Gyrosphere | Race (epic, ~1:30 lap) | A cartoon stadium course on the inside of a giant sphere: no straights, the road winds across the floor, up the walls and upside-down over the ceiling, criss-crossing itself (over/unders plus open through-junctions with no walls). All three kinds of loop: vertical loops, corkscrews and banked helix spirals, plus jumps, rolling hills and bumpy roller sections. Three CHORD routes fork off the wall and cut through the middle of the sphere to another part of the course: LOOP CHORD (a loop in mid-air), TWIST CHORD (a double corkscrew) and SKY CHORD |
 | Stadium | Battle | Walled arena with cover, jump pads, rocket/health/boost pickups |
 | Crater Field | Battle | Rolling hills with brick forts and stone pillars |
 
@@ -100,6 +100,8 @@ Take the jumps fast: if you come up short, you wipe out and respawn past the lan
 
 **Drifting:** hold Space while steering. The longer you hold it, the hotter the sparks get: blue, then orange, then pink.
 
+**Drafting:** tuck in close behind a car ahead (lined up with it, both at speed) and its slipstream pulls you along: after a moment you get more top speed, quicker acceleration and a trickle of nitro. Wind lines stream past your car and 💨 SLIPSTREAM shows on screen while it works. It works in battle mode too.
+
 ### Battle controls
 
 | Key | Action |
@@ -110,7 +112,7 @@ Take the jumps fast: if you come up short, you wipe out and respawn past the lan
 | 1 … 9, 0 (top row) / mouse wheel | Switch weapon |
 | Right click / E / Q | Rocket (grab red pickups for ammo) |
 | Shift | Boost |
-| Space | Drift / handbrake |
+| Space | Drift while steering (as in race mode: the tail swings out, sparks heat up, nitro charges) / handbrake when slow |
 | Tab | Scoreboard |
 | M | Mute |
 | Esc | Pause menu: change your car (takes effect when you next respawn) |
