@@ -878,3 +878,149 @@ export function buildDiceRod(body, color) {
     flames: [[0.35, 0.4, -2.4], [-0.35, 0.4, -2.4]],
   };
 }
+
+// ---------------- 5. Stadium F1 ----------------
+
+function f1Livery(color, noseLeft) {
+  const Z0 = -2.3, Z1 = 2.55, L = Z1 - Z0, YM = 1.15;
+  return canvasTex(1024, 256, (g, W, H) => {
+    const px = (z) => (noseLeft ? (Z1 - z) / L : (z - Z0) / L) * W;
+    const py = (y) => (1 - y / YM) * H;
+    const gr = g.createLinearGradient(0, 0, 0, H);
+    gr.addColorStop(0, shade(color, 0.18));
+    gr.addColorStop(0.55, color);
+    gr.addColorStop(1, shade(color, -0.3));
+    g.fillStyle = gr;
+    g.fillRect(0, 0, W, H);
+    // White flash sweeping back from the nose, thinning over the sidepod
+    g.fillStyle = '#f4f6f8';
+    g.beginPath();
+    g.moveTo(px(2.55), py(0.36));
+    g.lineTo(px(1.2), py(0.42));
+    g.lineTo(px(-0.2), py(0.58));
+    g.lineTo(px(-1.9), py(0.62));
+    g.lineTo(px(-1.9), py(0.55));
+    g.lineTo(px(-0.2), py(0.48));
+    g.lineTo(px(1.2), py(0.33));
+    g.lineTo(px(2.55), py(0.3));
+    g.closePath();
+    g.fill();
+    // Carbon floor edge
+    g.fillStyle = '#15171b';
+    g.fillRect(0, py(0.31), W, H);
+    // Race number roundel on the engine cover
+    const cx = px(-0.9), cy = py(0.78), r = 0.13 * (H / YM);
+    g.save();
+    g.translate(cx, cy);
+    g.scale((W / L) / (H / YM), 1);
+    g.fillStyle = '#ffffff';
+    g.beginPath();
+    g.arc(0, 0, r, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#111';
+    g.font = `900 ${Math.round(r * 1.25)}px Arial Black, Impact, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('01', 0, 3);
+    g.restore();
+  });
+}
+
+export function buildStadiumF1(body, color) {
+  const add = adder(body);
+  const Z0 = -2.3, Z1 = 2.55;
+  const W = table([[-2.3, 0.2], [-1.9, 0.3], [-1.2, 0.42], [-0.4, 0.46], [0.3, 0.4], [1.0, 0.3], [1.8, 0.2], [2.4, 0.13], [2.55, 0.06]]);
+  const top = table([[-2.3, 0.52], [-1.9, 0.62], [-1.2, 0.88], [-0.5, 1.02], [-0.15, 0.94], [0.2, 0.74], [1.0, 0.64], [1.8, 0.52], [2.4, 0.42], [2.55, 0.36]]);
+  const floor = table([[-2.3, 0.3], [2.55, 0.3]]);
+  const section = (z, a, out) => {
+    const w = W(z), c = Math.cos(a), s = Math.sin(a), n = 2.4;
+    const x = w * Math.pow(Math.abs(c), 2 / n);
+    const mid = floor(z) + 0.14;
+    const y = s >= 0 ? mid + (top(z) - mid) * Math.pow(Math.abs(s), 2 / n) : mid - (mid - floor(z)) * Math.pow(Math.abs(s), 2 / n);
+    return out.set(x, y, z);
+  };
+  const liv = [f1Livery(color, true), f1Livery(color, false)];
+  const skins = liv.map((t) => mats.paint('#ffffff', { map: t, metalness: 0.5, roughness: 0.22, side: THREE.DoubleSide }));
+  loft(body, { z0: Z0, z1: Z1, section, material: (side) => skins[side > 0 ? 0 : 1], yMax: 1.15, plainAbove: 2 });
+  const paint = mats.paint(color, { metalness: 0.5, roughness: 0.22 });
+  const white = mats.paint('#f4f6f8', { metalness: 0.2, roughness: 0.3 });
+  const carbon = mats.flat('#16181c', { roughness: 0.45, metalness: 0.3 });
+
+  // White centre stripe over the nose, cockpit surround and engine cover
+  const stripe = [];
+  for (let z = Z0 + 0.05; z <= Z1 - 0.05; z += 0.05) stripe.push(z);
+  const sPos = [], sIdx = [];
+  stripe.forEach((z, i) => {
+    const y = top(z) + 0.006, w = Math.min(0.11, W(z) * 0.5);
+    sPos.push(-w, y, z, w, y, z);
+    if (i) sIdx.push(2 * i - 2, 2 * i - 1, 2 * i, 2 * i - 1, 2 * i + 1, 2 * i);
+  });
+  const sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.Float32BufferAttribute(sPos, 3));
+  sg.setIndex(sIdx);
+  sg.computeVertexNormals();
+  add(sg, new THREE.MeshStandardMaterial({ color: '#f4f6f8', roughness: 0.3, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
+
+  // Sidepods: rounded, with dark intakes up front
+  for (const f of [1, -1]) {
+    const pod = add(new RoundedBoxGeometry(0.46, 0.36, 1.9, 4, 0.14), paint, f * 0.62, 0.5, -0.45);
+    pod.rotation.x = 0.04;
+    add(new RoundedBoxGeometry(0.38, 0.26, 0.06, 2, 0.05), carbon, f * 0.62, 0.52, 0.52);
+    add(new RoundedBoxGeometry(0.47, 0.06, 1.6, 2, 0.02), white, f * 0.62, 0.66, -0.55);
+  }
+  // Cockpit and driver
+  const pit = add(new THREE.SphereGeometry(1, 20, 10), carbon, 0, 0.74, 0.18);
+  pit.scale.set(0.3, 0.12, 0.5);
+  const helmet = add(new THREE.SphereGeometry(0.2, 20, 14), white, 0, 0.9, 0.05);
+  helmet.scale.set(1, 1.05, 1.15);
+  const visor = add(new THREE.SphereGeometry(0.205, 20, 10, -0.9, 1.8, 1.1, 0.55), mats.glass('#0b0e14'), 0, 0.9, 0.05);
+  visor.scale.set(1, 1.05, 1.15);
+  add(new THREE.TorusGeometry(0.2, 0.025, 6, 20).rotateX(Math.PI / 2), paint, 0, 0.92, 0.05);
+  // Airbox intake above the driver's head
+  add(new RoundedBoxGeometry(0.3, 0.2, 0.08, 2, 0.04), carbon, 0, 1.0, -0.33);
+  // Mirrors
+  for (const f of [1, -1]) {
+    add(new THREE.BoxGeometry(0.04, 0.1, 0.04), carbon, f * 0.38, 0.78, 0.55);
+    add(new RoundedBoxGeometry(0.16, 0.08, 0.05, 2, 0.02), paint, f * 0.44, 0.84, 0.55);
+  }
+  // Front wing: main plane, accent flap, endplates
+  add(new RoundedBoxGeometry(2.05, 0.05, 0.5, 2, 0.02), carbon, 0, 0.3, 2.3);
+  add(new RoundedBoxGeometry(1.9, 0.04, 0.2, 2, 0.015), paint, 0, 0.37, 2.2).rotation.x = -0.25;
+  for (const f of [1, -1]) add(new RoundedBoxGeometry(0.04, 0.24, 0.56, 2, 0.015), white, f * 1.02, 0.36, 2.3);
+  // Rear wing: two elements, endplates and a centre pylon
+  add(new RoundedBoxGeometry(1.7, 0.05, 0.42, 2, 0.02), carbon, 0, 1.08, -2.1).rotation.x = 0.1;
+  add(new RoundedBoxGeometry(1.7, 0.04, 0.22, 2, 0.015), paint, 0, 1.2, -2.25).rotation.x = 0.45;
+  for (const f of [1, -1]) add(new RoundedBoxGeometry(0.05, 0.62, 0.62, 2, 0.02), paint, f * 0.87, 1.0, -2.15);
+  add(new THREE.BoxGeometry(0.06, 0.5, 0.3), carbon, 0, 0.8, -2.05);
+  // Diffuser and brake light
+  add(new RoundedBoxGeometry(1.1, 0.16, 0.3, 2, 0.03), carbon, 0, 0.3, -2.25);
+  add(new THREE.BoxGeometry(0.22, 0.08, 0.03), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff2020').multiplyScalar(3), toneMapped: false }), 0, 0.5, -2.33);
+
+  const FZ = 1.55, RZ = -1.35, FT = 0.98, RT = 1.0;
+  // Suspension arms from the body to each wheel
+  const arm = (a, b) => {
+    const d = b.clone().sub(a), len = d.length();
+    const m = add(new THREE.CylinderGeometry(0.025, 0.025, len, 6), carbon, 0, 0, 0);
+    m.position.copy(a).lerp(b, 0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+  };
+  for (const [z, x, r] of [[FZ, FT, 0.4], [RZ, RT, 0.48]]) {
+    for (const f of [1, -1]) {
+      for (const [dy, dz] of [[0.12, 0.18], [0.12, -0.18], [-0.08, 0.2], [-0.08, -0.2]]) {
+        arm(new THREE.Vector3(f * 0.2, r + dy, z + dz), new THREE.Vector3(f * (x - 0.12), r + dy * 0.6, z));
+      }
+    }
+  }
+  return {
+    roofY: 1.35,
+    axles: [
+      { z: FZ, r: 0.4, w: 0.36, track: FT, steer: true },
+      { z: RZ, r: 0.48, w: 0.56, track: RT, steer: false },
+    ],
+    tire: (r, w) => tireGeometry(r, w, { inner: 0.7 }),
+    rim: (tire, r, w) => {
+      spokeRim(tire, r, w, { spokes: 6, spokeW: 0.07, face: mats.flat('#23262c', { metalness: 0.7, roughness: 0.3 }), dish: mats.flat('#0f1013'), lip: mats.paint(color, { metalness: 0.5, roughness: 0.25 }) });
+    },
+    flames: [[0.25, 0.5, -2.4], [-0.25, 0.5, -2.4]],
+  };
+}

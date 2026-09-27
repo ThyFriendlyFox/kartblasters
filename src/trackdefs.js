@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { sphereCourse } from './sphere.js';
 
 const STEP = 3; // spacing of generated control points
 const UP = new THREE.Vector3(0, 1, 0);
@@ -664,6 +665,16 @@ export const TRACKS = {
         },
       },
     ],
+  },
+  gyro: {
+    name: 'Gyrosphere',
+    desc: 'Epic: a stadium course on the inside of a giant sphere, over walls and ceiling',
+    theme: 'stadium',
+    width: 16,
+    pillars: 'truss',
+    build() {
+      return sphereCourse({ radius: 260, center: new THREE.Vector3(0, 300, 0), turns: 3, waves: 5, amp: 0.45, tiltDeg: 65, width: this.width });
+    },
   },
 };
 export const TRACK_IDS = Object.keys(TRACKS);

@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { Track, Path } from './track.js';
 import { buildCar, CARS, CAR_IDS } from './cars.js';
 import { Fx } from './fx.js';
@@ -716,6 +720,16 @@ export class RaceGame {
     this.mapId = welcome?.map || map;
     this.track = new Track(this.mapId);
     this.track.build(this.scene);
+    if (this.track.def.theme === 'stadium') {
+      // Filmic tone mapping and bloom so the sunset and light strips glow
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
+      const composer = (this.composer = new EffectComposer(renderer));
+      composer.addPass(new RenderPass(this.scene, this.camera));
+      const res = new THREE.Vector2(window.innerWidth, window.innerHeight).multiplyScalar(mobile ? 0.5 : 1);
+      composer.addPass((this.bloom = new UnrealBloomPass(res, 0.45, 0.5, 1.0))); // only HDR lights bloom
+      composer.addPass(new OutputPass());
+    }
     this.fx = new Fx(this.scene);
     this.skids = new SkidMarks(this.scene);
     this.fr = Track.newFrame();
@@ -1069,7 +1083,8 @@ export class RaceGame {
     const dt = Math.min(0.05, (t - this.last) / 1000) || 0.016;
     this.last = t;
     this.update(dt, now);
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer) this.composer.render(dt);
+    else this.renderer.render(this.scene, this.camera);
   }
 
   update(dt, now) {
@@ -1387,6 +1402,7 @@ export class RaceGame {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.composer?.setSize(window.innerWidth, window.innerHeight);
   }
 
   endGame(title, sub) {

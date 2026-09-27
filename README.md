@@ -15,7 +15,7 @@ The menu (and the battle pause screen) shows each car's Acceleration, Top Speed,
 | --- | --- |
 | Hyper | Balanced wedge-shaped supercar |
 | Muscle | Top speed, heavy steering |
-| Formula | Grippy and quick, but fragile in battle |
+| Formula | Stadium-style open-wheel F1 (red and white, big wings, slick tyres): grippy and quick, but fragile in battle |
 | Buggy | Punchy acceleration, great grip |
 | Brute | Slow, but takes a beating (135 HP) |
 | Longtail 17 | Gold 1970s long-tail endurance racer: highest top speed, a little less grip (90 HP). Always wears its gold #17 race livery; your color tints one side pinstripe |
@@ -40,6 +40,7 @@ The menu shows an aerial preview of the selected map with its lap length and a r
 | Canyon Colossus | Race (epic, ~2 min lap) | Stacked stunt park on lattice pillars: roads cross over and under each other, three wall rides, a spiral climb to a high line, two corkscrews, loops and a long plunge |
 | Skyline Spiral | Race (epic, ~2 min lap) | Neon stunt stack: climbing wall ride, loop, rooftop gaps, a corkscrew, two turns up a skyscraper, a dive onto a banked wall-ride descent, double loop and a wall-ride chicane |
 | Chaos Crossing | Race (epic, ~2 min lap) | The two stunt parks tangled together: a Canyon-style main line with roads crossing over and under each other, plus two forks into Skyline-style routes, SKY TOWER (a double spiral climb and a dive back in) and WALL STACK (a stacked, climbing wall-ride hairpin that passes over itself) |
+| Gyrosphere | Race (epic, ~1:45 lap) | A Trackmania-style stadium course on the inside of a giant sphere: no straights, the road winds across the floor, up the walls and upside-down over the ceiling, criss-crossing itself (over/unders plus open through-junctions with no walls), with two loops, three jumps and three corkscrews. Stadium look: concrete road, blue neon edges, orange-lit barriers, sunset sky, floodlights, grandstands and bloom |
 | Stadium | Battle | Walled arena with cover, jump pads, rocket/health/boost pickups |
 | Crater Field | Battle | Rolling hills with brick forts and stone pillars |
 

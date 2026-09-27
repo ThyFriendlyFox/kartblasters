@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { buildLongtail, longtailRim, LONGTAIL_WHEELS } from './longtail.js';
-import { buildSixBySix, buildShark, buildSixPack, buildDiceRod } from './cars2.js';
+import { buildSixBySix, buildShark, buildSixPack, buildDiceRod, buildStadiumF1 } from './cars2.js';
 
 /** Selectable cars. Stats are multipliers used by both battle and race physics. */
 export const CARS = {
   hyper: { name: 'Hyper', desc: 'Balanced wedge-shaped supercar', speed: 1.0, accel: 1.0, grip: 1.0, boost: 1.0, hp: 100 },
   muscle: { name: 'Muscle', desc: 'Top speed, heavy steering', speed: 1.07, accel: 0.95, grip: 0.9, boost: 1.1, hp: 110 },
-  formula: { name: 'Formula', desc: 'Grippy and quick, but fragile', speed: 1.04, accel: 1.05, grip: 1.15, boost: 0.95, hp: 85 },
+  formula: { name: 'Formula', desc: 'Stadium open-wheeler: grippy and quick, but fragile', speed: 1.04, accel: 1.05, grip: 1.15, boost: 0.95, hp: 85 },
   buggy: { name: 'Buggy', desc: 'Punchy acceleration, great grip', speed: 0.95, accel: 1.15, grip: 1.1, boost: 0.9, hp: 100 },
   truck: { name: 'Brute', desc: 'Slow, but takes a beating', speed: 0.92, accel: 0.88, grip: 0.95, boost: 0.85, hp: 135 },
   longtail: { name: 'Longtail 17', desc: 'Gold 70s endurance racer, flat-12', speed: 1.09, accel: 0.97, grip: 0.97, boost: 1.0, hp: 90 },
@@ -97,20 +97,6 @@ export function buildCar(type, color) {
       roofY = 1.5;
       break;
     }
-    case 'formula': {
-      wheel = [0.42, 0.5, 1.55, -1.3, 1.15, 1.15];
-      add(profile([[-1.9, 0.3], [2.3, 0.3], [2.35, 0.45], [0.6, 0.75], [-0.3, 0.95], [-1.9, 0.85]], 0.9), paint);
-      add(box(0.55, 0.12, 1.5), paint, 0.85, 0.45, -0.3); // side pods
-      add(box(0.55, 0.12, 1.5), paint, -0.85, 0.45, -0.3);
-      add(box(2.5, 0.08, 0.5), paint, 0, 0.32, 2.35); // front wing
-      add(box(2.1, 0.1, 0.5), dark, 0, 1.35, -1.9); // rear wing
-      add(box(0.1, 0.5, 0.35), dark, 0.9, 1.1, -1.9);
-      add(box(0.1, 0.5, 0.35), dark, -0.9, 1.1, -1.9);
-      add(new THREE.SphereGeometry(0.34, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), glass, 0, 0.9, -0.2); // canopy
-      add(box(0.5, 0.35, 0.25), neon, 0, 1.05, -0.8); // airbox
-      roofY = 1.45;
-      break;
-    }
     case 'buggy': {
       wheel = [0.62, 0.55, 1.4, -1.3, 1.2, 1.1];
       add(profile([[-1.6, 0.7], [1.8, 0.7], [2.0, 1.0], [1.3, 1.1], [-1.5, 1.1], [-1.7, 0.95]], 1.6), paint);
@@ -148,11 +134,12 @@ export function buildCar(type, color) {
       roofY = 1.3;
       break;
     }
+    case 'formula':
     case 'sixbysix':
     case 'shark':
     case 'sixpack':
     case 'dicerod': {
-      custom = { sixbysix: buildSixBySix, shark: buildShark, sixpack: buildSixPack, dicerod: buildDiceRod }[type](body, color);
+      custom = { formula: buildStadiumF1, sixbysix: buildSixBySix, shark: buildShark, sixpack: buildSixPack, dicerod: buildDiceRod }[type](body, color);
       roofY = custom.roofY;
       break;
     }

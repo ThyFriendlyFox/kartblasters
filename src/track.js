@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildMountain } from './mountain.js';
+import { buildStadium, stadiumRoadTexture } from './stadium.js';
 import { TRACKS, TrackTurtle } from './trackdefs.js';
 
 const DS = 1; // physics sample spacing along the track (world units)
@@ -61,6 +62,7 @@ export class Path {
       roll[i] = a.roll + wrapAngle(b.roll - a.roll) * fr;
       if (a.up && b.up) upAt[i] = a.up.clone().lerp(b.up, fr).normalize();
       if (a.loop || b.loop) loopAt[i] = 1;
+      if (a.norail || b.norail) this.railL[i] = this.railR[i] = 0;
       this.gap[i] = a.gap && b.gap ? 1 : a.gap && fr < 0.5 ? 1 : b.gap && fr >= 0.5 ? 1 : 0;
       this.boost[i] = (fr < 0.5 ? a.boost : b.boost) ? 1 : 0;
       this.kick[i] = a.kick || b.kick ? 1 : 0;
@@ -128,7 +130,8 @@ export class Path {
     // (The main circuit keeps its seam twist spread over the whole lap: that
     // lean is part of its character.)
     // (Minus whatever the corkscrew correction already covers at the seam.)
-    const seam = wrapAngle(twist - corr[n - 1]);
+    // (Roads with an explicit up everywhere, like the sphere, need no seam spread.)
+    const seam = upAt[0] && upAt[n - 1] ? 0 : wrapAngle(twist - corr[n - 1]);
     if (closed) for (let i = 0; i < n; i++) twistAt[i] = (seam * i) / n;
     for (let i = 0; i < n; i++) twistAt[i] += corr[i];
     let need = 0;
@@ -384,6 +387,7 @@ export class Path {
         const i0 = rows[r], i1 = rows[r + 1];
         if (this.gap[i0] || this.gap[i1]) continue;
         for (let li = 0; li < list.length; li++) {
+          if (!list[li]) continue;
           const [a, b] = list[li];
           if (isRail && !(li < 3 ? this.railL[i0] && this.railL[i1] : this.railR[i0] && this.railR[i1])) continue;
           const quad = [];
@@ -418,8 +422,9 @@ export class Path {
     };
 
     const neon = theme === 'neon';
+    const stadium = theme === 'stadium';
     const roadMat = new THREE.MeshStandardMaterial({
-      map: roadTexture(neon),
+      map: stadium ? stadiumRoadTexture() : roadTexture(neon),
       vertexColors: true,
       roughness: neon ? 0.35 : 0.45,
       metalness: neon ? 0.3 : 0.05,
@@ -432,12 +437,44 @@ export class Path {
       polygonOffsetFactor: beneath ? 1 : 0,
       polygonOffsetUnits: beneath ? 4 : 0,
     });
-    const railMat = neon
-      ? new THREE.MeshStandardMaterial({ color: '#ffe600', emissive: '#b8a000', emissiveIntensity: 0.8, side: THREE.DoubleSide })
-      : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, side: THREE.DoubleSide });
-    const underMat = new THREE.MeshStandardMaterial({ color: neon ? '#101428' : '#c55e00', side: THREE.DoubleSide });
+    if (stadium) {
+      roadMat.vertexColors = false;
+      roadMat.roughness = 0.72;
+      roadMat.metalness = 0.05;
+      roadMat.envMapIntensity = 0.35;
+    }
+    const railMat = stadium
+      ? new THREE.MeshStandardMaterial({ color: '#2b3038', metalness: 0.7, roughness: 0.32, side: THREE.DoubleSide })
+      : neon
+        ? new THREE.MeshStandardMaterial({ color: '#ffe600', emissive: '#b8a000', emissiveIntensity: 0.8, side: THREE.DoubleSide })
+        : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, side: THREE.DoubleSide });
+    const underMat = new THREE.MeshStandardMaterial({ color: stadium ? '#3a3f48' : neon ? '#101428' : '#c55e00', side: THREE.DoubleSide, metalness: stadium ? 0.5 : 0 });
 
-    const roadMesh = new THREE.Mesh(build(strips.road, 16, true, false, true), roadMat);
+    if (stadium) {
+      // Glowing light strips: blue lines along the road edges, and a strip on
+      // top of each wall in the section's colour (orange loops, blue twists...)
+      const glow = (list, colorOf, isRail) => {
+        const g = build(list, 16, false, isRail);
+        const count = g.attributes.position.count, cols = new Float32Array(count * 3);
+        // Recover the sample each vertex came from via its v coordinate
+        const uvs = g.attributes.uv;
+        for (let v = 0; v < count; v++) {
+          const idx = Math.min(n - 1, Math.round((uvs.getY(v) * 16) / this.ds) % n);
+          col.set(colorOf(idx)).multiplyScalar(1.7);
+          cols.set([col.r, col.g, col.b], v * 3);
+        }
+        g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+        const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide }));
+        scene.add(mesh);
+      };
+      const edge = [[[-hw + 0.35, 0.06], [-hw + 0.85, 0.06]], [[hw - 0.85, 0.06], [hw - 0.35, 0.06]]];
+      // Road-edge lines stop where the walls open for a through crossing
+      glow([edge[0], null, null, edge[1], null, null], () => '#2f7dff', true);
+      const tops = [[[-hw - railW, railH + 0.02], [-hw, railH + 0.02]], null, null, [[hw, railH + 0.02], [hw + railW, railH + 0.02]], null, null];
+      glow(tops, (i) => (this.color[i] === '#c9cdd4' ? '#ff8a1e' : this.color[i]), true);
+    }
+
+    const roadMesh = new THREE.Mesh(build(strips.road, 16, !stadium, false, true), roadMat);
     roadMesh.receiveShadow = true;
     const railMesh = new THREE.Mesh(build(strips.rail, 16, !neon, true), railMat);
     railMesh.castShadow = true;
@@ -469,6 +506,7 @@ export class Path {
       scene.add(new THREE.Mesh(g, padMat));
     }
 
+    this.stadium = stadium;
     const fr = Path.newFrame();
     if (startLine) this.buildStart(scene, neon, fr);
     this.buildStands(scene, neon);
@@ -532,7 +570,7 @@ export class Path {
   /** Chunky lattice pillars (Trackmania-style scaffolding) under elevated road. */
   buildTrussPillars(scene, neon) {
     const n = this.n;
-    const col = neon ? '#2de2ff' : '#c8342b';
+    const col = this.stadium ? '#aab3bf' : neon ? '#2de2ff' : '#c8342b';
     const tex = canvasTex(64, 64, (g, w, h) => {
       g.clearRect(0, 0, w, h);
       g.strokeStyle = col;
@@ -604,6 +642,7 @@ export class Track extends Path {
     this.def = def;
     this.id = TRACKS[id] ? id : 'orange';
     this.marks = turtle.marks || {};
+    this.sphere = turtle.info?.center ? turtle.info : null;
     this.branches = [];
     this.keys = [];
     const fr = Path.newFrame();
@@ -1157,6 +1196,7 @@ function bannerTexture(neon) {
 }
 
 function buildEnvironment(scene, theme, track) {
+  if (theme === 'stadium') return buildStadium(scene, track);
   if (theme === 'neon') {
     scene.background = new THREE.Color('#070718');
     scene.fog = new THREE.Fog('#120a30', 200, 900);
