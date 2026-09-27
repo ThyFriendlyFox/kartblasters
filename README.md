@@ -88,6 +88,10 @@ Tick **💣 Destructible terrain** when hosting a battle (on by default). Then:
 
 Everyone sees the same holes. Craters are carved so the result doesn't depend on the order messages arrive in, and players who join mid-game get the full damage history.
 
+### Finishing a race
+
+The race keeps going until every player has crossed the line; the AI gets 15 more seconds after the last human finishes. Anyone still racing after that gets an estimated time from their pace so far (shown as `~1:23.45`) and is ranked by it. Once you've finished you can watch the others; the host can press Enter (or **End race now**) to wrap up early. A safety timeout (a minute after the first finisher, or half the winning time if that's longer) stops an idle player holding everyone up.
+
 ## Play with a friend
 
 1. Player 1 picks a car, the mode and the map, then clicks **Create room** and **Copy invite link** at the top of the screen.

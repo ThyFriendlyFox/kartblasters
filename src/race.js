@@ -14,7 +14,12 @@ const BASE_TOP = 58;
 const GRIPC = 60;
 const CAR_HALF_W = 1.15;
 const SNAP_MS = 50;
-const FINISH_GRACE_MS = 30000;
+// After the last human crosses the line, how long the AI gets to finish too;
+// then anyone still going gets an estimated time from their pace so far
+const BOT_GRACE_MS = 15000;
+// Safety net so one idle player can't hold a race open forever:
+// at least a minute after the first finisher, longer for long races
+const FINISH_TIMEOUT_MIN_MS = 60000;
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -979,7 +984,7 @@ export class RaceGame {
         this.onFinish(m.id, m.time);
         break;
       case 're':
-        this.onRaceEnd(m.order);
+        this.onRaceEnd(m.order, m.est);
         break;
       case 'gpNext':
         if (host) return;
@@ -990,6 +995,8 @@ export class RaceGame {
   }
 
   hostStart() {
+    // Finished and waiting on the others: the host can call it early
+    if (this.net.isHost && this.phase === 'racing' && this.me.finished) return this.endRace();
     if (!this.net.isHost || !(this.phase === 'lobby' || this.phase === 'results')) return;
     if (this.gp && this.phase === 'results') {
       // On to the next Grand Prix race (or a fresh Grand Prix after the last one)
@@ -1039,12 +1046,33 @@ export class RaceGame {
     for (const c of this.cars.values()) if (!m.grid.includes(c.id)) c.inRace = false;
   }
 
+  /** Host: end the race now; cars still racing get estimated times from their pace. */
+  endRace() {
+    if (this.phase !== 'racing') return;
+    const elapsed = performance.now() - this.goAt, L = this.track.L;
+    const est = {};
+    for (const c of this.cars.values()) {
+      if (!c.inRace || this.results.has(c.id)) continue;
+      // Distance covered since the green light vs the whole race (grid spot to finish line)
+      const start = c.startProg ?? L;
+      const covered = this.track.progress(c) - start, total = (this.laps + 1) * L - start;
+      est[c.id] = Math.round(elapsed * (total / Math.max(covered, L * 0.05)));
+    }
+    const order = this.standings()
+      .map((c) => c.id)
+      .sort((a, b) => (this.results.get(a) ?? est[a] ?? Infinity) - (this.results.get(b) ?? est[b] ?? Infinity));
+    const m = { t: 're', order, est };
+    this.net.send(m);
+    this.onRaceEnd(order, est);
+  }
+
   onFinish(id, time) {
     if (this.results.has(id)) return;
     this.results.set(id, time);
     const c = this.cars.get(id);
     if (c) c.finished = time;
     if (!this.firstFinish) this.firstFinish = performance.now();
+    if (!this.players.get(id)?.bot) this.lastHumanFinish = performance.now();
     const p = this.players.get(id);
     const place = this.results.size;
     if (p) this.hud.feed(`🏁 <span style="color:${esc(p.color)}">${esc(p.name)}</span> finished ${ord(place)} · ${fmtTime(time)}`);
@@ -1118,15 +1146,16 @@ export class RaceGame {
     this.hud.center(`RACE ${this.gp.index + 1} OF ${this.gp.maps.length}`, TRACKS[mapId].name, 2500);
   }
 
-  onRaceEnd(order) {
+  onRaceEnd(order, est = {}) {
     this.phase = 'results';
+    this.lastHumanFinish = 0;
     const winner = order[0];
     if (winner && this.players.get(winner)) this.players.get(winner).wins++;
     const rows = order.map((id, i) => {
       const p = this.players.get(id);
       if (!p) return '';
       const t = this.results.get(id);
-      return `<tr class="${id === this.me.id ? 'me' : ''}"><td>${ord(i + 1)}</td><td><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}${p.bot ? ' <small>BOT</small>' : ''}</td><td>${t != null ? fmtTime(t) : 'DNF'}</td></tr>`;
+      return `<tr class="${id === this.me.id ? 'me' : ''}"><td>${ord(i + 1)}</td><td><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}${p.bot ? ' <small>BOT</small>' : ''}</td><td>${t != null ? fmtTime(t) : est[id] ? `<span class="est" title="Still racing: estimated from their pace">~${fmtTime(est[id])}</span>` : 'DNF'}</td></tr>`;
     });
     const el = document.getElementById('results');
     el.querySelector('tbody').innerHTML = rows.join('');
@@ -1213,6 +1242,7 @@ export class RaceGame {
       }
       if (now >= this.goAt) {
         this.phase = 'racing';
+        for (const c of this.cars.values()) c.startProg = this.track.progress(c); // for pace estimates
         this.hud.center('GO!', '', 900);
         this.sfx.play('go');
       }
@@ -1263,16 +1293,16 @@ export class RaceGame {
     }
     this.sfx.screech(me.drifting && !me.flying ? Math.min(1, 0.5 + me.driftT) : 0);
 
-    // Host ends the race when everyone is done (or after a grace period)
+    // Host ends the race when everyone has finished; the AI gets a short
+    // grace after the last human, and idle players a long timeout
     if (this.net.isHost && racing) {
       const racers = all.filter((c) => c.inRace);
       const done = racers.every((c) => this.results.has(c.id));
-      if (racers.length && (done || (this.firstFinish && now - this.firstFinish > FINISH_GRACE_MS))) {
-        const order = this.standings().map((c) => c.id);
-        const m = { t: 're', order };
-        this.net.send(m);
-        this.onRaceEnd(order);
-      }
+      const humansDone = racers.every((c) => c.bot || this.results.has(c.id));
+      const winnerTime = Math.min(...this.results.values());
+      const timeout = this.firstFinish && now - this.firstFinish > Math.max(FINISH_TIMEOUT_MIN_MS, winnerTime * 0.5);
+      const botsHadTheirGo = humansDone && this.lastHumanFinish && now - this.lastHumanFinish > BOT_GRACE_MS;
+      if (racers.length && (done || botsHadTheirGo || timeout)) this.endRace();
     }
 
     this.track.update(dt);
@@ -1594,6 +1624,9 @@ export class RaceGame {
       msg = this.net.isHost
         ? `Free drive · ${this.net.offline ? '' : 'invite friends, then '}<button id="lobbyStart">Start ${this.laps}-lap race</button> <small>(or Enter)</small>`
         : 'Free drive · waiting for the host to start the race';
+    } else if (this.phase === 'racing' && me.finished && me.inRace) {
+      const left = [...this.cars.values()].filter((c) => c.inRace && !this.results.has(c.id)).length;
+      msg = `🏁 Finished! Waiting for ${left} still racing…${this.net.isHost ? ' <button id="lobbyStart">End race now</button> <small>(or Enter)</small>' : ''}`;
     } else if (this.phase === 'spectate') msg = 'Spectating · you will join the next race';
     hud.set('lobby', lobbyMsg, 'html', msg);
     lobbyMsg.classList.toggle('hidden', !msg);
