@@ -9,7 +9,7 @@ Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no ga
 
 ## Cars
 
-The menu (and the battle pause screen) shows each car's Acceleration, Top Speed, Boost Power, Grip and Health as bars.
+The menu (and the battle pause screen) shows each car's Acceleration, Top Speed, Boost Power, Grip, Handling and Health as bars. Grip is how much sideways force the tyres hold at speed; Handling is how tightly the car can turn.
 
 | Car | Style |
 | --- | --- |
@@ -18,11 +18,12 @@ The menu (and the battle pause screen) shows each car's Acceleration, Top Speed,
 | Formula | Stadium-style open-wheel F1 (red and white, big wings, slick tyres): grippy and quick, but fragile in battle |
 | Buggy | Punchy acceleration, great grip |
 | Brute | Slow, but takes a beating (135 HP) |
-| Longtail 17 | Gold 1970s long-tail endurance racer: highest top speed, a little less grip (90 HP). Always wears its gold #17 race livery; your color tints one side pinstripe |
+| Longtail 17 | Gold 1970s long-tail endurance racer: very high top speed, a little less grip (90 HP). Always wears its gold #17 race livery; your color tints one side pinstripe |
 | Rockcrawler | Black six-wheeled luxury off-road pickup on knobby tyres: slow, very grippy, toughest in battle (145 HP). Stays black; your color is its wheel rings |
 | Sharkbite | Shark-shaped hot rod with open jaws, fins and a chrome blown engine: quick off the line |
 | Six Pack | Candy-paint six-wheeler hatch with the engine bursting through the hood, on redline tyres |
 | Dice Rod | Two-tone patina rat rod with dice air cleaners and wide whitewalls: punchy, a bit loose |
+| Soundbreaker | Twin-jet land speed record car: needle nose with a striped probe, two jet nacelles with chrome intakes, a swept T-tail fin in your color, solid aluminium wheels. Highest top speed and boost, but the slowest acceleration and very low handling: it rules the long epic tracks and struggles on tight ones (120 HP) |
 
 ## Maps
 
@@ -134,6 +135,7 @@ Take the jumps fast: if you come up short, you wipe out and respawn past the lan
   | Rockcrawler | Twin-turbo V8 (smooth, deep) |
   | Sharkbite, Six Pack | Blown V8 (lumpy cam) |
   | Dice Rod | Rodded old-school V8 (low rumble) |
+  | Soundbreaker | Twin jet (turbine whine and roar) |
 
 - **Music:** a procedurally generated soundtrack, with one tune per map style and one for battle. Toggle it with the 🎵 checkbox in the menu or pause screen, or press **N**. **M** mutes everything.
 

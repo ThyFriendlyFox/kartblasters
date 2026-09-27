@@ -1024,3 +1024,142 @@ export function buildStadiumF1(body, color) {
     flames: [[0.25, 0.5, -2.4], [-0.25, 0.5, -2.4]],
   };
 }
+
+// ---------------- 6. Twin-jet land speed record car ----------------
+
+/** Surface of revolution around the car's length: profile is [radius, z] from tail to nose. */
+function latheZ(profile, seg = 32) {
+  return new THREE.LatheGeometry(profile.map(([r, z]) => new THREE.Vector2(r, z)), seg).rotateX(Math.PI / 2);
+}
+
+/** White roundel with a race number, for the nacelle sides. */
+function jetRoundel(color) {
+  return canvasTex(128, 128, (g, w, h) => {
+    g.fillStyle = '#f4f6f8';
+    g.beginPath();
+    g.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = color;
+    g.lineWidth = 10;
+    g.beginPath();
+    g.arc(w / 2, h / 2, w / 2 - 12, 0, Math.PI * 2);
+    g.stroke();
+    g.fillStyle = '#111';
+    g.font = '900 54px Arial Black, Impact, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('SSC', w / 2, h / 2 + 3);
+  });
+}
+
+/**
+ * Soundbreaker: a jet-powered land speed record car. A needle nose with a
+ * striped probe, two huge jet nacelles with chrome intake lips, a swept
+ * T-tail fin in the player's colour, and solid aluminium wheels tucked
+ * under the body.
+ */
+export function buildThrust(body, color) {
+  const add = adder(body);
+  const black = mats.paint('#0c0d10', { metalness: 0.35, roughness: 0.18, side: THREE.DoubleSide });
+  const accent = mats.paint(color, { metalness: 0.4, roughness: 0.25, side: THREE.DoubleSide });
+  const chrome = mats.chrome();
+  const dark = mats.flat('#07080a', { side: THREE.DoubleSide });
+  const white = mats.paint('#f4f6f8', { metalness: 0.1, roughness: 0.3 });
+
+  // Central fuselage: long needle nose, dipping slightly toward the ground
+  const FY = 0.56;
+  const fus = add(
+    latheZ([[0.001, -3.05], [0.2, -3.0], [0.3, -2.7], [0.34, -2.1], [0.35, -0.8], [0.35, 0.5], [0.32, 1.2], [0.25, 1.95], [0.16, 2.6], [0.075, 3.0], [0.05, 3.08]]),
+    black,
+    0,
+    FY,
+    0,
+  );
+  fus.rotation.x = 0.05;
+  const noseAt = (z) => new THREE.Vector3(0, FY - Math.sin(0.05) * z, z);
+  const tip = add(new THREE.ConeGeometry(0.05, 0.3, 16).rotateX(Math.PI / 2), chrome);
+  tip.position.copy(noseAt(3.23));
+  tip.rotation.x = 0.05;
+  // Striped air-data probe off the nose
+  for (let k = 0; k < 6; k++) {
+    const seg = add(new THREE.CylinderGeometry(0.018, 0.018, 0.09, 8).rotateX(Math.PI / 2), k % 2 ? mats.flat('#111') : mats.flat('#ffcf1f'));
+    seg.position.copy(noseAt(3.42 + k * 0.09));
+  }
+  // Cockpit canopy on the spine ahead of the intakes
+  const canopy = add(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), mats.glass('#10151d'), 0, FY + 0.27, 1.3);
+  canopy.scale.set(0.16, 0.12, 0.42);
+  // Pinstripes along the nose (white and the player's colour)
+  for (const [f, m] of [[1, white], [-1, white]]) {
+    const s = add(new THREE.BoxGeometry(0.015, 0.03, 1.1), m, f * 0.215, FY + 0.03, 2.05);
+    s.rotation.y = -f * 0.1;
+    const s2 = add(new THREE.BoxGeometry(0.015, 0.03, 1.1), accent, f * 0.205, FY - 0.03, 2.05);
+    s2.rotation.y = -f * 0.1;
+  }
+
+  // Jet nacelles either side
+  const NX = 0.68, NY = 0.64, NR = 0.42;
+  const roundel = new THREE.MeshStandardMaterial({ map: jetRoundel(color), roughness: 0.35, transparent: true, polygonOffset: true, polygonOffsetFactor: -2 });
+  for (const f of [1, -1]) {
+    const x = f * NX;
+    add(latheZ([[0.22, -3.0], [0.33, -2.92], [0.4, -2.55], [NR, -1.8], [NR, 0.0], [0.41, 0.6], [0.38, 0.95]]), black, x, NY, 0);
+    // Intake: chrome lip, dark duct, fan face and spinner
+    const lip = add(new THREE.TorusGeometry(0.37, 0.05, 10, 32), chrome, x, NY, 0.95);
+    lip.rotation.y = 0;
+    add(new THREE.CylinderGeometry(0.36, 0.36, 0.5, 28, 1, true).rotateX(Math.PI / 2), dark, x, NY, 0.72);
+    add(new THREE.CircleGeometry(0.36, 28), mats.flat('#2a2d33', { metalness: 0.6, roughness: 0.4 }), x, NY, 0.5);
+    for (let k = 0; k < 10; k++) {
+      const blade = add(new THREE.BoxGeometry(0.05, 0.3, 0.012), mats.flat('#4a4f58', { metalness: 0.8, roughness: 0.3 }), x, NY, 0.52);
+      blade.rotation.order = 'ZYX'; // pitch each blade about its own radius, then spin it into place
+      blade.rotation.set(0, 0.5, (k / 10) * Math.PI * 2);
+      blade.geometry.translate(0, 0.17, 0);
+    }
+    add(new THREE.ConeGeometry(0.1, 0.18, 16).rotateX(Math.PI / 2), chrome, x, NY, 0.6);
+    // Exhaust nozzle
+    add(new THREE.TorusGeometry(0.22, 0.035, 8, 24), mats.satin(), x, NY, -3.0);
+    add(new THREE.CircleGeometry(0.21, 24).rotateY(Math.PI), mats.flat('#26140a', { emissive: '#ff5a14', emissiveIntensity: 0.35 }), x, NY, -2.97);
+    // Side stripe in the player's colour, and a roundel
+    add(new THREE.BoxGeometry(0.02, 0.07, 2.6), accent, f * (NX + NR + 0.004), NY + 0.04, -0.8);
+    add(new THREE.BoxGeometry(0.02, 0.025, 2.6), white, f * (NX + NR + 0.004), NY - 0.03, -0.8);
+    const r = add(new THREE.CircleGeometry(0.26, 28), roundel, f * (NX + NR + 0.012), NY + 0.02, 0.0);
+    r.rotation.y = f * Math.PI / 2;
+  }
+
+  // Swept tail fin with a T-tailplane, in the player's colour
+  const fin = new THREE.Shape();
+  fin.moveTo(-1.5, 0);
+  fin.lineTo(-3.0, 0);
+  fin.lineTo(-3.22, 1.12);
+  fin.lineTo(-2.78, 1.12);
+  fin.closePath();
+  const finGeo = new THREE.ExtrudeGeometry(fin, { depth: 0.08, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 1 });
+  finGeo.rotateY(-Math.PI / 2); // shape x -> car z
+  finGeo.translate(0.04, 0, 0);
+  add(finGeo, accent, 0, FY + 0.26, 0);
+  const tp = add(new RoundedBoxGeometry(1.7, 0.05, 0.5, 2, 0.02), black, 0, FY + 1.4, -3.0);
+  tp.rotation.x = 0.02;
+  add(new RoundedBoxGeometry(0.16, 0.12, 0.62, 2, 0.04), accent, 0, FY + 1.42, -3.0);
+
+  // Solid aluminium wheels: two pairs under each nacelle, a narrow pair at the tail
+  const alloy = mats.satin();
+  return {
+    roofY: 0.95,
+    axles: [
+      { z: 0.25, r: 0.3, w: 0.2, track: NX, steer: true },
+      { z: -0.6, r: 0.3, w: 0.2, track: NX, steer: false },
+      { z: -2.35, r: 0.3, w: 0.14, track: 0.2, steer: false },
+    ],
+    tireMat: alloy,
+    tire: (r, w) => new THREE.CylinderGeometry(r, r, w, 28).rotateZ(Math.PI / 2),
+    rim: (tire, r, w) => {
+      for (const f of [1, -1]) {
+        const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.35, r * 0.35, 0.02, 20).rotateZ(Math.PI / 2), mats.flat('#3a3e45', { metalness: 0.8, roughness: 0.3 }));
+        hub.position.x = f * (w / 2 + 0.005);
+        tire.add(hub);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 0.72, 0.012, 6, 28).rotateY(Math.PI / 2), mats.flat('#7b8089', { metalness: 0.8 }));
+        ring.position.x = f * (w / 2 + 0.004);
+        tire.add(ring);
+      }
+    },
+    flames: [[NX, NY, -3.0], [-NX, NY, -3.0]],
+  };
+}

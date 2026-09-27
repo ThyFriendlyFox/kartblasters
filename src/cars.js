@@ -1,19 +1,24 @@
 import * as THREE from 'three';
 import { buildLongtail, longtailRim, LONGTAIL_WHEELS } from './longtail.js';
-import { buildSixBySix, buildShark, buildSixPack, buildDiceRod, buildStadiumF1 } from './cars2.js';
+import { buildSixBySix, buildShark, buildSixPack, buildDiceRod, buildStadiumF1, buildThrust } from './cars2.js';
 
-/** Selectable cars. Stats are multipliers used by both battle and race physics. */
+/**
+ * Selectable cars. Stats are multipliers used by both battle and race physics.
+ * grip = how much sideways force the tyres hold at speed; handling = how
+ * tightly the car can turn (its maximum turn rate).
+ */
 export const CARS = {
-  hyper: { name: 'Hyper', desc: 'Balanced wedge-shaped supercar', speed: 1.0, accel: 1.0, grip: 1.0, boost: 1.0, hp: 100 },
-  muscle: { name: 'Muscle', desc: 'Top speed, heavy steering', speed: 1.07, accel: 0.95, grip: 0.9, boost: 1.1, hp: 110 },
-  formula: { name: 'Formula', desc: 'Stadium open-wheeler: grippy and quick, but fragile', speed: 1.04, accel: 1.05, grip: 1.15, boost: 0.95, hp: 85 },
-  buggy: { name: 'Buggy', desc: 'Punchy acceleration, great grip', speed: 0.95, accel: 1.15, grip: 1.1, boost: 0.9, hp: 100 },
-  truck: { name: 'Brute', desc: 'Slow, but takes a beating', speed: 0.92, accel: 0.88, grip: 0.95, boost: 0.85, hp: 135 },
-  longtail: { name: 'Longtail 17', desc: 'Gold 70s endurance racer, flat-12', speed: 1.09, accel: 0.97, grip: 0.97, boost: 1.0, hp: 90 },
-  sixbysix: { name: 'Rockcrawler', desc: 'Six-wheeled off-road pickup: grippy tank', speed: 0.93, accel: 0.92, grip: 1.12, boost: 0.88, hp: 145 },
-  shark: { name: 'Sharkbite', desc: 'Shark hot rod with a blown V8', speed: 1.02, accel: 1.1, grip: 0.97, boost: 1.2, hp: 95 },
-  sixpack: { name: 'Six Pack', desc: 'Six-wheeled hatch, engine through the hood', speed: 1.03, accel: 1.02, grip: 1.08, boost: 1.1, hp: 105 },
-  dicerod: { name: 'Dice Rod', desc: 'Patina rat rod on whitewalls', speed: 1.0, accel: 1.12, grip: 0.92, boost: 1.15, hp: 100 },
+  hyper: { name: 'Hyper', desc: 'Balanced wedge-shaped supercar', speed: 1.0, accel: 1.0, grip: 1.0, handling: 1.0, boost: 1.0, hp: 100 },
+  muscle: { name: 'Muscle', desc: 'Top speed, heavy steering', speed: 1.07, accel: 0.95, grip: 0.9, handling: 0.92, boost: 1.1, hp: 110 },
+  formula: { name: 'Formula', desc: 'Stadium open-wheeler: grippy and quick, but fragile', speed: 1.04, accel: 1.05, grip: 1.15, handling: 1.08, boost: 0.95, hp: 85 },
+  buggy: { name: 'Buggy', desc: 'Punchy acceleration, great grip', speed: 0.95, accel: 1.15, grip: 1.1, handling: 1.1, boost: 0.9, hp: 100 },
+  truck: { name: 'Brute', desc: 'Slow, but takes a beating', speed: 0.92, accel: 0.88, grip: 0.95, handling: 0.9, boost: 0.85, hp: 135 },
+  longtail: { name: 'Longtail 17', desc: 'Gold 70s endurance racer, flat-12', speed: 1.09, accel: 0.97, grip: 0.97, handling: 0.96, boost: 1.0, hp: 90 },
+  sixbysix: { name: 'Rockcrawler', desc: 'Six-wheeled off-road pickup: grippy tank', speed: 0.93, accel: 0.92, grip: 1.12, handling: 0.93, boost: 0.88, hp: 145 },
+  shark: { name: 'Sharkbite', desc: 'Shark hot rod with a blown V8', speed: 1.02, accel: 1.1, grip: 0.97, handling: 0.98, boost: 1.2, hp: 95 },
+  sixpack: { name: 'Six Pack', desc: 'Six-wheeled hatch, engine through the hood', speed: 1.03, accel: 1.02, grip: 1.08, handling: 1.04, boost: 1.1, hp: 105 },
+  dicerod: { name: 'Dice Rod', desc: 'Patina rat rod on whitewalls', speed: 1.0, accel: 1.12, grip: 0.92, handling: 0.97, boost: 1.15, hp: 100 },
+  thrust: { name: 'Soundbreaker', desc: 'Twin-jet land speed record car: huge top speed and boost, slow to spool up, turns like a train', speed: 1.14, accel: 0.78, grip: 0.9, handling: 0.55, boost: 1.3, hp: 120 },
 };
 export const CAR_IDS = Object.keys(CARS);
 
@@ -23,6 +28,7 @@ const STAT_DEFS = [
   ['Top Speed', 'speed'],
   ['Boost Power', 'boost'],
   ['Grip', 'grip'],
+  ['Handling', 'handling'],
   ['Health', 'hp'],
 ];
 export function statBarsHTML(id) {
@@ -138,8 +144,9 @@ export function buildCar(type, color) {
     case 'sixbysix':
     case 'shark':
     case 'sixpack':
-    case 'dicerod': {
-      custom = { formula: buildStadiumF1, sixbysix: buildSixBySix, shark: buildShark, sixpack: buildSixPack, dicerod: buildDiceRod }[type](body, color);
+    case 'dicerod':
+    case 'thrust': {
+      custom = { formula: buildStadiumF1, sixbysix: buildSixBySix, shark: buildShark, sixpack: buildSixPack, dicerod: buildDiceRod, thrust: buildThrust }[type](body, color);
       roofY = custom.roofY;
       break;
     }
@@ -186,7 +193,7 @@ export function buildCar(type, color) {
       pivot.position.set(x, ax.r, ax.z);
       body.add(pivot);
       const geo = custom?.tire ? custom.tire(ax.r, ax.w) : new THREE.CylinderGeometry(ax.r, ax.r, ax.w, 18).rotateZ(Math.PI / 2);
-      const tire = new THREE.Mesh(geo, tireMat);
+      const tire = new THREE.Mesh(geo, custom?.tireMat || tireMat);
       tire.castShadow = true;
       if (custom) custom.rim(tire, ax.r, ax.w);
       else if (type === 'longtail') longtailRim(tire, ax.r, ax.w);

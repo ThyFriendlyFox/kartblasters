@@ -245,7 +245,7 @@ export class Kart {
 
     // Steering scales with speed (can't spin in place)
     const speedFactor = Math.max(-1, Math.min(1, vF / 8));
-    const turnRate = 2.5 * st.grip * (this.drifting ? 1.4 : 1) * (this.boosting ? 0.8 : 1);
+    const turnRate = 2.5 * st.grip * st.handling * (this.drifting ? 1.4 : 1) * (this.boosting ? 0.8 : 1);
     this.heading += input.steer * turnRate * speedFactor * dt * (this.onGround ? 1 : 0.4);
     this.steerVis += (input.steer - this.steerVis) * Math.min(1, dt * 10);
 

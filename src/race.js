@@ -162,7 +162,7 @@ export class RaceCar {
   }
 
   yawMax(spd) {
-    return Math.min(2.2, (GRIPC * this.stats.grip) / Math.max(spd, 1)) * (this.drifting ? 1.6 : 1) * Math.min(1, spd / 5);
+    return Math.min(2.2, (GRIPC * this.stats.grip) / Math.max(spd, 1)) * this.stats.handling * (this.drifting ? 1.6 : 1) * Math.min(1, spd / 5);
   }
 
   /** Track-space arcade physics; cars stick to the road through loops. */
@@ -623,6 +623,12 @@ export class RaceBrain {
       }
     }
     kAvg /= cnt;
+    // A jump coming up: carry the right speed into it (slow-accelerating cars use nitro)
+    let jumpAhead = false;
+    for (let a = 10; a <= 110 && !jumpAhead; a += 5) {
+      path.frame(car.s + a, this.fr);
+      jumpAhead = !!this.fr.gap;
+    }
     const hw = path.hw;
     let target = clamp(kAvg * 280, -hw * 0.5, hw * 0.5) + this.lane;
     let wantCap = 0.35;
@@ -668,14 +674,17 @@ export class RaceBrain {
     target = clamp(target, lo, hi);
     path.frame(car.s, fr);
     const want = clamp((target - car.d) * 0.1, -wantCap, wantCap);
-    const vmax = Math.sqrt((GRIPC * car.stats.grip) / Math.max(kMax, 1e-4));
+    const vmax = Math.sqrt((GRIPC * car.stats.grip * car.stats.handling) / Math.max(kMax, 1e-4));
     input.drift = car.v > vmax * 1.02 && car.v > 25;
     car.drifting = input.drift && car.v > 18;
     const ym = car.yawMax(Math.abs(car.v));
     input.steer = clamp(-((want - car.psi) * 4 + fr.k * car.v) / Math.max(ym, 0.05), -1, 1);
-    if (car.v > vmax * 1.6) input.throttle = -1;
-    else if (car.v > vmax * 1.35) input.throttle = 0;
-    input.boost = kMax < 0.012 && car.boost > 0.35;
+    // (Never lift for a bend beyond a jump: the jump needs the speed)
+    if (!jumpAhead && car.v > vmax * 1.6) input.throttle = -1;
+    else if (!jumpAhead && car.v > vmax * 1.35) input.throttle = 0;
+    // Jumps are built for about 50-65: nitro if too slow to clear one, ease off if flying in far too fast
+    input.boost = jumpAhead ? car.v < 52 && car.boost > 0.05 : kMax < 0.012 && car.boost > 0.35;
+    if (jumpAhead && car.v > 68) input.throttle = 0;
     return input;
   }
 }
