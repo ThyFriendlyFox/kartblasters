@@ -19,6 +19,11 @@ import { adder, mats, canvasTex, tireGeometry, spokeRim, sidewallRing, profileGe
 
 const rb = (w, h, d, r = 0.05, s = 2) => new RoundedBoxGeometry(w, h, d, s, Math.max(0.001, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001)));
 const V = (p) => new THREE.Vector3(...p);
+/** A pinstripe/decal colour that reads on top of the given paint: gold on dark paint, near-black on light. */
+const contrast = (hex) => {
+  const c = new THREE.Color(hex);
+  return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b > 0.45 ? '#1b1b1f' : '#f0cf7a';
+};
 
 /** Tube through points (a bent frame member). */
 function tube(add, mat, pts, r = 0.042) {
@@ -255,10 +260,12 @@ function yellowPlate(text) {
 
 export function buildWedge(body, color) {
   const add = adder(body);
-  const black = mats.paint('#08090b', { metalness: 0.5, roughness: 0.16 });
+  const black = mats.paint(color, { metalness: 0.5, roughness: 0.16 }); // body in the player's colour
+  const louvre = mats.paint('#08090b', { metalness: 0.5, roughness: 0.16 });
   const trim = mats.flat('#141518', { roughness: 0.55 });
   const glass = mats.glass('#1b2533', { transparent: true, opacity: 0.9, side: THREE.DoubleSide });
-  const stripe = mats.paint(color, { metalness: 0.6, roughness: 0.25 });
+  const accent = contrast(color);
+  const stripe = mats.paint(accent, { metalness: 0.6, roughness: 0.25 });
   const FZ = 1.45, RZ = -1.38, RF = 0.35, RR = 0.37;
 
   // Folded-paper wedge: sharp low nose, flat rising hood, long flat deck
@@ -288,7 +295,7 @@ export function buildWedge(body, color) {
     // Belt-line pinstripes and a TURBO script on the doors
     add(new THREE.BoxGeometry(0.012, 0.022, 4.1), stripe, f * 0.935, 0.72, 0.05);
     add(new THREE.BoxGeometry(0.012, 0.012, 3.2), stripe, f * 0.935, 0.4, 0.05);
-    const d = add(new THREE.PlaneGeometry(0.9, 0.22), new THREE.MeshBasicMaterial({ map: textDecal('TURBO', color), transparent: true }), f * 0.937, 0.58, 0.1);
+    const d = add(new THREE.PlaneGeometry(0.9, 0.22), new THREE.MeshBasicMaterial({ map: textDecal('TURBO', accent), transparent: true }), f * 0.937, 0.58, 0.1);
     d.rotation.y = f * Math.PI / 2;
     // Engine air intake behind the door, door line, mirror
     add(rb(0.02, 0.16, 0.34, 0.01), trim, f * 0.93, 0.78, -1.05);
@@ -298,7 +305,7 @@ export function buildWedge(body, color) {
   // Louvred engine cover between the sails
   for (let i = 0; i < 9; i++) {
     const z = -0.86 - i * 0.13, y = 1.19 - i * 0.026;
-    const l = add(rb(1.2, 0.025, 0.1, 0.01), black, 0, y, z);
+    const l = add(rb(1.2, 0.025, 0.1, 0.01), louvre, 0, y, z);
     l.rotation.x = -0.35;
   }
   // Hood: pop-up lamp shut lines and a vent

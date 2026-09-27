@@ -288,7 +288,7 @@ function plateTex(text) {
 export function buildSixBySix(body, accent) {
   const add = adder(body);
   const rb = (w, h, d, r = 0.06) => new RoundedBoxGeometry(w, h, d, 3, r);
-  const black = mats.paint('#0b0c0e', { metalness: 0.5, roughness: 0.26, envMapIntensity: 0.35 });
+  const black = mats.paint(accent, { metalness: 0.5, roughness: 0.26, envMapIntensity: 0.6 }); // body in the player's colour
   const trim = mats.flat('#15171b', { roughness: 0.5 });
   const carbon = new THREE.MeshStandardMaterial({ map: carbonTex(), roughness: 0.35, metalness: 0.3, envMap: studioEnv(), envMapIntensity: 0.5 });
   const chrome = mats.chrome();
@@ -591,7 +591,8 @@ function profileGeo(shape, width, bevel = 0.1) {
 
 export function buildSixPack(body, color) {
   const add = adder(body);
-  const spectra = mats.paint(shade(color, -0.2), { metalness: 1, roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1 });
+  // Candy paint that still reads as the chosen colour (full metalness turned it muddy)
+  const spectra = mats.paint(color, { metalness: 0.65, roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1 });
   const chrome = mats.chrome();
   const cast = new THREE.MeshStandardMaterial({ color: '#f2f4f8', metalness: 1, roughness: 0.3, map: sparkleTex(), envMap: studioEnv(), envMapIntensity: 1.3 });
   const dark = mats.flat('#0d0e11');
@@ -1060,8 +1061,9 @@ function jetRoundel(color) {
  */
 export function buildThrust(body, color) {
   const add = adder(body);
-  const black = mats.paint('#0c0d10', { metalness: 0.35, roughness: 0.18, side: THREE.DoubleSide });
-  const accent = mats.paint(color, { metalness: 0.4, roughness: 0.25, side: THREE.DoubleSide });
+  // Fuselage and nacelles in the player's colour; tail fin and pinstripes contrast
+  const black = mats.paint(color, { metalness: 0.35, roughness: 0.18, side: THREE.DoubleSide });
+  const accent = mats.paint('#0c0d10', { metalness: 0.4, roughness: 0.25, side: THREE.DoubleSide });
   const chrome = mats.chrome();
   const dark = mats.flat('#07080a', { side: THREE.DoubleSide });
   const white = mats.paint('#f4f6f8', { metalness: 0.1, roughness: 0.3 });

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 
 /**
- * "Longtail 17": a 1970s long-tail endurance racer in gold race livery
- * (red sills, black side stripe with pinstripes, #17 roundels, blue headlight
- * domes, gold 5-spoke wheels). Unlike the other cars, the body is a lofted
+ * "Longtail 17": a 1970s long-tail endurance racer in race livery: body in
+ * the player's colour, red sills, black side stripe with pinstripes, #17 roundels, blue headlight
+ * domes, gold 5-spoke wheels. Unlike the other cars, the body is a lofted
  * shell: a smooth cross-section swept along the length, with fender humps,
  * a low wedge nose and open wheel arches.
  *
@@ -79,11 +79,12 @@ function liveryTexture(noseLeft, accent) {
   const g = c.getContext('2d');
   const px = (z) => (noseLeft ? (Z_NOSE - z) / LEN : (z - Z_TAIL) / LEN) * W;
   const py = (y) => (1 - y / Y_MAX) * H;
-  // Gold, a little lighter up top
+  // Body paint in the player's colour, a little lighter up top
+  const tint = (k) => '#' + new THREE.Color(accent).lerp(new THREE.Color(k > 0 ? '#ffffff' : '#000000'), Math.abs(k)).getHexString();
   const grad = g.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, '#ffe79a');
-  grad.addColorStop(0.5, '#f0c14b');
-  grad.addColorStop(1, '#c9922c');
+  grad.addColorStop(0, tint(0.35));
+  grad.addColorStop(0.5, accent);
+  grad.addColorStop(1, tint(-0.2));
   g.fillStyle = grad;
   g.fillRect(0, 0, W, H);
   // Red lower sills (higher around the nose)
@@ -102,7 +103,7 @@ function liveryTexture(noseLeft, accent) {
   };
   band(0.39, 0.52, '#15161a');
   band(0.462, 0.482, '#e3262b');
-  band(0.425, 0.445, accent);
+  band(0.425, 0.445, '#f4f4f4');
   // #17 roundel on the door
   const rx = px(0.5), ry = py(0.56), rr = (0.15 / Y_MAX) * H;
   g.save();
@@ -171,13 +172,13 @@ function loftHalf(side, mat) {
   return m;
 }
 
-/** Adds the car's parts to `body`. `accent` tints one pinstripe (the player's color). */
+/** Adds the car's parts to `body`, painted in `accent` (the player's colour). */
 export function buildLongtail(body, accent) {
   const paintOpts = { metalness: 0.35, roughness: 0.3, side: THREE.DoubleSide };
   body.add(loftHalf(1, new THREE.MeshStandardMaterial({ map: liveryTexture(true, accent), ...paintOpts })));
   body.add(loftHalf(-1, new THREE.MeshStandardMaterial({ map: liveryTexture(false, accent), ...paintOpts })));
 
-  const gold = new THREE.MeshStandardMaterial({ color: '#f0c14b', metalness: 0.35, roughness: 0.3 });
+  const gold = new THREE.MeshStandardMaterial({ color: accent, metalness: 0.35, roughness: 0.3 }); // body-coloured panels
   const black = new THREE.MeshStandardMaterial({ color: '#15161a', roughness: 0.6 });
   const add = (geo, mat, x, y, z) => {
     const m = new THREE.Mesh(geo, mat);

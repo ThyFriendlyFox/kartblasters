@@ -28,17 +28,17 @@ The menu (and the battle pause screen) shows each car's Acceleration, Top Speed,
 
 | Car | Style |
 | --- | --- |
-| Hyper | Black 1980s folded-paper wedge supercar with a turbo: louvred rear window, cross-spoke alloys, TURBO plates; your color is its pinstripes and door script. Balanced |
+| Hyper | 1980s folded-paper wedge supercar with a turbo, in your color: black louvred rear window, cross-spoke alloys, contrasting pinstripes and door script, TURBO plates. Balanced |
 | Muscle | 1960s muscle coupe in your color: stacked headlamps, split grille, hood scoop, chrome trim, Rally wheels on redline tyres. Top speed, heavy steering |
 | Formula | Stadium-style open-wheel F1 (red and white, big wings, slick tyres): grippy and quick, but fragile in battle |
 | Buggy | Rail dune buggy: tube frame and roll cage in your color, woodgrain side panels, twin-tube front beam, flat-4 with twin air cleaners, big knobby rear tyres and an orange whip flag. Punchy acceleration, great grip |
 | Brute | Armoured mine-protected 4x4 in your color: V-shaped hull, crew box with ports and cooling fans, spare wheels on the flanks, huge tyres. Slow, but takes a beating (135 HP) |
-| Longtail 17 | Gold 1970s long-tail endurance racer: very high top speed, a little less grip (90 HP). Always wears its gold #17 race livery; your color tints one side pinstripe |
-| Rockcrawler | Black six-wheeled luxury off-road pickup on knobby tyres: slow, very grippy, toughest in battle (145 HP). Stays black; your color is its wheel rings |
+| Longtail 17 | 1970s long-tail endurance racer in your color with its #17 race livery (red sills, black side stripe, gold wheels): very high top speed, a little less grip (90 HP) |
+| Rockcrawler | Six-wheeled luxury off-road pickup in your color, with carbon flares, on knobby tyres: slow, very grippy, toughest in battle (145 HP) |
 | Sharkbite | Shark-shaped hot rod with open jaws, fins and a chrome blown engine: quick off the line |
 | Six Pack | Candy-paint six-wheeler hatch with the engine bursting through the hood, on redline tyres |
 | Dice Rod | Two-tone patina rat rod with dice air cleaners and wide whitewalls: punchy, a bit loose |
-| Soundbreaker | Twin-jet land speed record car: needle nose with a striped probe, two jet nacelles with chrome intakes, a swept T-tail fin in your color, solid aluminium wheels. Highest top speed and boost, but the slowest acceleration and very low handling: it rules the long epic tracks and struggles on tight ones (120 HP) |
+| Soundbreaker | Twin-jet land speed record car: needle nose with a striped probe, two jet nacelles with chrome intakes, body and nacelles in your color with a black swept T-tail fin, solid aluminium wheels. Highest top speed and boost, but the slowest acceleration and very low handling: it rules the long epic tracks and struggles on tight ones (120 HP) |
 
 ## Maps
 
