@@ -185,6 +185,8 @@ WebRTC uses STUN to punch through home routers, which works for most people. Som
 
 ## Promo ad
 
+Watch it: [`public/kart-blasters-ad.mp4`](public/kart-blasters-ad.mp4), also served by the deployed site at `/kart-blasters-ad.mp4`.
+
 `tools/ad/` renders a ~34 s beat-synced promo video from the real game (tracks, cars, arena and music engine) with motion-graphics titles on top:
 
 ```bash
