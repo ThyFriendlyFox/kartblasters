@@ -182,3 +182,14 @@ VITE_PEER_SECURE=true
 ### Connection trouble?
 
 WebRTC uses STUN to punch through home routers, which works for most people. Some strict networks (certain corporate, school or mobile carrier NATs) need a TURN relay server. If you can't connect, try a different network or add TURN servers via `VITE_ICE_SERVERS` (a JSON array of RTCIceServer objects).
+
+## Promo ad
+
+`tools/ad/` renders a ~34 s beat-synced promo video from the real game (tracks, cars, arena and music engine) with motion-graphics titles on top:
+
+```bash
+npx vite --host 127.0.0.1 --port 5174 &
+node tools/ad/render.mjs kart-blasters-ad.mp4 --w 1920 --h 1080   # needs ffmpeg on PATH (or --ffmpeg /path/to/ffmpeg)
+```
+
+Fonts: Russo One and Bungee (SIL Open Font License).
