@@ -157,8 +157,8 @@ function loftHalf(side, mat) {
   for (let i = 0; i < zs.length - 1; i++) {
     for (let j = 0; j < NA; j++) {
       const a = i * row + j, b = a + 1, c = a + row, d = c + 1;
-      if (side > 0) idx.push(a, c, b, b, c, d);
-      else idx.push(a, b, c, b, d, c);
+      if (side > 0) idx.push(a, b, c, b, d, c); // outward-facing
+      else idx.push(a, c, b, b, c, d);
     }
   }
   const g = new THREE.BufferGeometry();
