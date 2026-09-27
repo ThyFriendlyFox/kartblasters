@@ -668,7 +668,7 @@ export const TRACKS = {
   },
   gyro: {
     name: 'Gyrosphere',
-    desc: 'Epic: a stadium course on the inside of a giant sphere, over walls and ceiling',
+    desc: 'Epic: a cartoon stadium course inside a giant sphere, with chords through the middle',
     theme: 'stadium',
     width: 16,
     pillars: 'truss',

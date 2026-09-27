@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { buildMountain } from './mountain.js';
-import { buildStadium, stadiumRoadTexture } from './stadium.js';
+import { buildStadium, toon } from './stadium.js';
 import { TRACKS, TrackTurtle } from './trackdefs.js';
 
 const DS = 1; // physics sample spacing along the track (world units)
@@ -142,7 +142,7 @@ export class Path {
       const cr = new THREE.Vector3().crossVectors(endN, target);
       need = Math.atan2(cr.dot(Ti), endN.dot(target));
     }
-    if (need) {
+    if (need && upAt.some((u) => !u)) {
       // Transport twist builds up where the road climbs/dives while turning
       const w = new Float32Array(n);
       let tot = 0;
@@ -423,36 +423,30 @@ export class Path {
 
     const neon = theme === 'neon';
     const stadium = theme === 'stadium';
-    const roadMat = new THREE.MeshStandardMaterial({
-      map: stadium ? stadiumRoadTexture() : roadTexture(neon),
+    const surface = {
+      map: roadTexture(neon),
       vertexColors: true,
-      roughness: neon ? 0.35 : 0.45,
-      metalness: neon ? 0.3 : 0.05,
       side: THREE.DoubleSide,
-      emissive: neon ? '#0a1440' : '#000000',
       // Where a branch road still overlaps the main road at a fork or join,
       // the main road wins: it stays whole and the branch only shows where it
       // flares out past the main road's edge
       polygonOffset: beneath,
       polygonOffsetFactor: beneath ? 1 : 0,
       polygonOffsetUnits: beneath ? 4 : 0,
-    });
-    if (stadium) {
-      roadMat.vertexColors = false;
-      roadMat.roughness = 0.72;
-      roadMat.metalness = 0.05;
-      roadMat.envMapIntensity = 0.35;
-    }
+    };
+    const roadMat = stadium
+      ? toon('#ffffff', surface) // cartoon look: flat toon bands
+      : new THREE.MeshStandardMaterial({ ...surface, roughness: neon ? 0.35 : 0.45, metalness: neon ? 0.3 : 0.05, emissive: neon ? '#0a1440' : '#000000' });
     const railMat = stadium
-      ? new THREE.MeshStandardMaterial({ color: '#2b3038', metalness: 0.7, roughness: 0.32, side: THREE.DoubleSide })
+      ? toon('#ffffff', { side: THREE.DoubleSide })
       : neon
         ? new THREE.MeshStandardMaterial({ color: '#ffe600', emissive: '#b8a000', emissiveIntensity: 0.8, side: THREE.DoubleSide })
         : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, side: THREE.DoubleSide });
-    const underMat = new THREE.MeshStandardMaterial({ color: stadium ? '#3a3f48' : neon ? '#101428' : '#c55e00', side: THREE.DoubleSide, metalness: stadium ? 0.5 : 0 });
+    const underMat = stadium ? toon('#5b6b8c', { side: THREE.DoubleSide }) : new THREE.MeshStandardMaterial({ color: neon ? '#101428' : '#c55e00', side: THREE.DoubleSide });
 
     if (stadium) {
-      // Glowing light strips: blue lines along the road edges, and a strip on
-      // top of each wall in the section's colour (orange loops, blue twists...)
+      // Bright strips: blue lines along the road edges, and a strip on top
+      // of each wall in the section's colour (pink loops, blue twists...)
       const glow = (list, colorOf, isRail) => {
         const g = build(list, 16, false, isRail);
         const count = g.attributes.position.count, cols = new Float32Array(count * 3);
@@ -460,26 +454,26 @@ export class Path {
         const uvs = g.attributes.uv;
         for (let v = 0; v < count; v++) {
           const idx = Math.min(n - 1, Math.round((uvs.getY(v) * 16) / this.ds) % n);
-          col.set(colorOf(idx)).multiplyScalar(1.7);
+          col.set(colorOf(idx));
           cols.set([col.r, col.g, col.b], v * 3);
         }
         g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
-        const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide }));
+        const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
         scene.add(mesh);
       };
       const edge = [[[-hw + 0.35, 0.06], [-hw + 0.85, 0.06]], [[hw - 0.85, 0.06], [hw - 0.35, 0.06]]];
       // Road-edge lines stop where the walls open for a through crossing
-      glow([edge[0], null, null, edge[1], null, null], () => '#2f7dff', true);
+      glow([edge[0], null, null, edge[1], null, null], () => '#1f8bff', true);
       const tops = [[[-hw - railW, railH + 0.02], [-hw, railH + 0.02]], null, null, [[hw, railH + 0.02], [hw + railW, railH + 0.02]], null, null];
-      glow(tops, (i) => (this.color[i] === '#c9cdd4' ? '#ff8a1e' : this.color[i]), true);
+      glow(tops, (i) => (this.color[i] === '#e8e3d8' ? '#ff8a1e' : this.color[i]), true);
     }
 
-    const roadMesh = new THREE.Mesh(build(strips.road, 16, !stadium, false, true), roadMat);
+    const roadMesh = new THREE.Mesh(build(strips.road, 16, true, false, true), roadMat);
     roadMesh.receiveShadow = true;
-    const railMesh = new THREE.Mesh(build(strips.rail, 16, !neon, true), railMat);
-    railMesh.castShadow = true;
+    const railMesh = new THREE.Mesh(build(strips.rail, 16, !neon && !stadium, true), railMat);
+    railMesh.castShadow = !stadium;
     const underMesh = new THREE.Mesh(build(strips.under, 16, false, false, true), underMat);
-    underMesh.castShadow = true;
+    underMesh.castShadow = !stadium;
     scene.add(roadMesh, railMesh, underMesh);
 
     // Boost pads
@@ -533,6 +527,7 @@ export class Path {
   }
 
   buildStands(scene, neon) {
+    if (this.onSphere) return; // the sphere's own frame holds the road up
     if (this.pillars) return this.buildTrussPillars(scene, neon);
     const n = this.n;
     const P = new THREE.Vector3(), N = new THREE.Vector3();
@@ -634,7 +629,9 @@ export class Track extends Path {
   constructor(id) {
     const def = TRACKS[id] || TRACKS.orange;
     const turtle = def.build();
-    const level = (def.branches || []).flatMap((bd) => [
+    // Routes come from the map def, or from the builder (sphere chords)
+    const branchDefs = def.branches || turtle.branches || [];
+    const level = branchDefs.filter((bd) => !bd.pts).flatMap((bd) => [
       { pos: turtle.marks[bd.from].pos, before: 10, after: 130 },
       { pos: turtle.marks[bd.to].pos, before: 130, after: 10 },
     ]);
@@ -651,22 +648,26 @@ export class Track extends Path {
       if (!m) throw new Error(`Track ${id}: missing mark ${name}`);
       return this.nearest(m.pos) * this.ds;
     };
-    (def.branches || []).forEach((bd, bi) => {
+    branchDefs.forEach((bd, bi) => {
       const a = markS(bd.from), b = markS(bd.to);
       const side = bd.side || 1;
       // The route leaves from the main road's own centerline and heading (a true Y),
       // and rejoins the same way (an inverse Y)
       this.frame(a, fr);
       const N0 = fr.N.clone();
-      const bt = new TrackTurtle(fr.P.x, fr.P.y, fr.P.z, Math.atan2(fr.T.x, fr.T.z), def.width).paint(bd.color || '#ff7a00');
-      bd.build(bt);
-      this.frame(b, fr);
-      try {
-        bt.closeS(fr.P.clone(), Math.atan2(fr.T.x, fr.T.z));
-      } catch (e) {
-        throw new Error(`Track ${id}, route ${bd.name}: ${e.message}`);
-      }
-      const path = new Path(bt.pts, { closed: false, hw: this.hw, N0, N1: fr.N.clone() });
+      let rpts = bd.pts;
+      if (!rpts) {
+        const bt = new TrackTurtle(fr.P.x, fr.P.y, fr.P.z, Math.atan2(fr.T.x, fr.T.z), def.width).paint(bd.color || '#ff7a00');
+        bd.build(bt);
+        this.frame(b, fr);
+        try {
+          bt.closeS(fr.P.clone(), Math.atan2(fr.T.x, fr.T.z));
+        } catch (e) {
+          throw new Error(`Track ${id}, route ${bd.name}: ${e.message}`);
+        }
+        rpts = bt.pts;
+      } else this.frame(b, fr);
+      const path = new Path(rpts, { closed: false, hw: this.hw, N0, N1: fr.N.clone() });
       const br = { id: bi + 1, path, from: a, to: b, side, name: bd.name || 'ALT ROUTE', lock: bd.lock || null };
       br.fork = this.splitZone(path, a, +1);
       br.join = this.splitZone(path, b, -1);
@@ -699,6 +700,7 @@ export class Track extends Path {
     const all = [this, ...this.branches.map((b) => b.path)];
     for (const p of all) {
       p.pillars = this.pillars;
+      p.onSphere = !!this.sphere;
       p.obstacles = all;
     }
   }
@@ -757,7 +759,8 @@ export class Track extends Path {
       }
       path.frame(j, bf);
       v.copy(bf.P).sub(fr.P);
-      const off = v.dot(fr.R), dy = v.y; // world height, so banked corners don't count
+      // World height, so banked corners don't count (on a sphere: height off the road)
+      const off = v.dot(fr.R), dy = this.sphere ? v.dot(fr.N) : v.y;
       offs.push(off);
       if (Math.abs(off) >= gap || Math.abs(dy) > 3) {
         // Heading of the branch relative to the main road at the gore
