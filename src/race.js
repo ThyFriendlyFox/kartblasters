@@ -1,8 +1,11 @@
 import * as THREE from 'three';
 import { Track, Path } from './track.js';
+import { TRACKS } from './trackdefs.js';
 import { buildCar, CARS, CAR_IDS } from './cars.js';
 import { Fx, SkidMarks } from './fx.js';
 import { BOT_NAMES, botColor } from './bots.js';
+import { musicFor } from './music.js';
+import { unlock, earnedHTML } from './achievements.js';
 import { Hud } from './hud.js';
 import { COLORS } from './game.js';
 
@@ -692,9 +695,11 @@ export class RaceBrain {
 // ------------------------------------------------------------------ game
 
 export class RaceGame {
-  constructor({ net, name, color, car, botCount = 0, sfx, code, map, laps = 3, welcome, mobile = null, mods = {} }) {
+  constructor({ net, name, color, car, botCount = 0, sfx, code, map, laps = 3, welcome, mobile = null, mods = {}, gp = null }) {
     this.mobile = mobile;
     this.mods = { size: 1, endless: false, ...(welcome?.mods || mods) };
+    // Grand Prix: a list of tracks raced back to back, with points per race
+    this.gp = welcome?.gp || (gp ? { maps: gp, index: 0, points: {} } : null);
     this.net = net;
     this.sfx = sfx;
     this.code = code;
@@ -747,7 +752,7 @@ export class RaceGame {
 
     this.hud.show();
     this.sfx.setCar(this.me.carType);
-    this.sfx.playMusic(this.track.def.theme);
+    this.playMapMusic();
     window.addEventListener('resize', () => this.onResize());
     this.last = performance.now();
     requestAnimationFrame((t) => this.frame(t));
@@ -911,6 +916,7 @@ export class RaceGame {
       map: this.mapId,
       laps: this.laps,
       mods: this.mods,
+      gp: this.gp,
       phase: this.phase,
       players: [...this.players.entries()].map(([id, p]) => [id, p.name, p.color, p.car, p.bot ? 1 : 0, p.wins]),
     };
@@ -970,11 +976,32 @@ export class RaceGame {
       case 're':
         this.onRaceEnd(m.order);
         break;
+      case 'gpNext':
+        if (host) return;
+        this.gp = m.gp;
+        this.loadMap(m.map);
+        break;
     }
   }
 
   hostStart() {
     if (!this.net.isHost || !(this.phase === 'lobby' || this.phase === 'results')) return;
+    if (this.gp && this.phase === 'results') {
+      // On to the next Grand Prix race (or a fresh Grand Prix after the last one)
+      const gp = this.gp;
+      if (gp.index + 1 >= gp.maps.length) {
+        gp.index = 0;
+        gp.points = {};
+      } else gp.index++;
+      const map = gp.maps[gp.index];
+      this.net.send({ t: 'gpNext', map, gp });
+      this.loadMap(map);
+      // Give everyone a moment to build the new track, then line up
+      clearTimeout(this.gpTimer);
+      this.gpTimer = setTimeout(() => this.phase === 'lobby' && this.hostStart(), 1500);
+      return;
+    }
+    clearTimeout(this.gpTimer);
     const ids = [...this.cars.keys()];
     // Previous winners start at the back
     ids.sort((a, b) => (this.players.get(a)?.wins || 0) - (this.players.get(b)?.wins || 0) || Math.random() - 0.5);
@@ -1019,7 +1046,14 @@ export class RaceGame {
     if (id === this.me.id) {
       this.hud.center(place === 1 ? 'YOU WIN!' : `FINISHED ${ord(place).toUpperCase()}`, fmtTime(time), 4000);
       this.sfx.play(place === 1 ? 'kill' : 'lap');
+      if (place <= 3) unlock('podium', this.sfx);
+      if (place === 1) unlock('winner', this.sfx);
+      if (place === 1 && !this.ach?.raceWall) unlock('flawless', this.sfx);
+      if (this.laps >= 20) unlock('marathon', this.sfx);
     }
+    // Photo finish: you and another car within 0.3 s
+    const mine = this.results.get(this.me.id);
+    if (mine != null && [...this.results].some(([other, t]) => other !== this.me.id && Math.abs(t - mine) < 300)) unlock('photo', this.sfx);
   }
 
   standings() {
@@ -1031,6 +1065,52 @@ export class RaceGame {
       if (fb != null) return 1;
       return this.track.progress(b) - this.track.progress(a);
     });
+  }
+
+  /**
+   * Swap to another track in place (Grand Prix): new scene and track, the
+   * same cars, players and connection.
+   */
+  loadMap(mapId) {
+    const old = this.scene;
+    const scene = new THREE.Scene();
+    for (const c of this.cars.values()) {
+      scene.add(c.root);
+      c.scene = scene;
+    }
+    old.traverse((o) => {
+      o.geometry?.dispose();
+      for (const m of [o.material].flat()) {
+        if (!m) continue;
+        m.map?.dispose();
+        m.dispose();
+      }
+    });
+    this.scene = scene;
+    this.mapId = mapId;
+    this.track = new Track(mapId);
+    this.track.build(scene);
+    this.fx = new Fx(scene);
+    this.skids = new SkidMarks(scene);
+    this.buildMinimap();
+    this.camInit = false;
+    for (const c of this.cars.values()) {
+      c.route = 0;
+      c.keys.clear();
+      c.lap = 0;
+      c.finished = 0;
+      c.inRace = false;
+      c.skid = null;
+    }
+    for (const b of this.bots) b.brain = new RaceBrain();
+    this.autopilot = null;
+    this.results.clear();
+    this.firstFinish = 0;
+    this.phase = 'lobby';
+    document.getElementById('results').classList.add('hidden');
+    this.lobbyPlace();
+    this.playMapMusic();
+    this.hud.center(`RACE ${this.gp.index + 1} OF ${this.gp.maps.length}`, TRACKS[mapId].name, 2500);
   }
 
   onRaceEnd(order) {
@@ -1045,10 +1125,46 @@ export class RaceGame {
     });
     const el = document.getElementById('results');
     el.querySelector('tbody').innerHTML = rows.join('');
-    el.querySelector('.hint').textContent = this.net.isHost ? 'Press Enter (or the button) to race again' : 'Waiting for the host to start the next race…';
+    el.querySelector('h2').textContent = '🏁 Race results';
+    el.querySelector('.gpWrap').innerHTML = this.gp ? this.gpResults(order) : '';
+    el.querySelector('.achWrap').innerHTML = earnedHTML();
+    const last = this.gp && this.gp.index + 1 >= this.gp.maps.length;
+    el.querySelector('#startRace').textContent = !this.gp ? 'Race again' : last ? '🏆 New Grand Prix' : `Next race ▶ ${TRACKS[this.gp.maps[this.gp.index + 1]].name}`;
+    el.querySelector('.hint').textContent = this.net.isHost
+      ? `Press Enter (or the button) to ${!this.gp ? 'race again' : last ? 'start a new Grand Prix' : 'go to the next race'}`
+      : 'Waiting for the host to start the next race…';
     document.getElementById('startRace').classList.toggle('hidden', !this.net.isHost);
     el.classList.remove('hidden');
     for (const c of this.cars.values()) c.inRace = false;
+  }
+
+  /** Award Grand Prix points for a race and render the championship table. */
+  gpResults(order) {
+    const gp = this.gp;
+    const PTS = [15, 12, 10, 8, 7, 6, 5, 4, 3, 2, 1];
+    if (gp.scored !== gp.index) {
+      gp.scored = gp.index;
+      order.forEach((id, i) => (gp.points[id] = (gp.points[id] || 0) + (PTS[i] || 0)));
+    }
+    const table = Object.entries(gp.points)
+      .filter(([id]) => this.players.get(id))
+      .sort((a, b) => b[1] - a[1] || order.indexOf(a[0]) - order.indexOf(b[0])); // ties: last race decides
+    const last = gp.index + 1 >= gp.maps.length;
+    const el = document.getElementById('results');
+    el.querySelector('h2').textContent = last ? '🏆 Grand Prix final standings' : `🏆 Grand Prix · race ${gp.index + 1} of ${gp.maps.length}`;
+    if (last) {
+      unlock('gpDone', this.sfx);
+      if (table[0]?.[0] === this.me.id) unlock('gpChamp', this.sfx);
+      const champ = this.players.get(table[0]?.[0]);
+      if (champ) this.hud.center(`${champ.name.toUpperCase()} WINS THE GRAND PRIX!`, '', 5000);
+    }
+    const rows = table.map(([id, pts], i) => {
+      const p = this.players.get(id);
+      const got = PTS[order.indexOf(id)] || 0;
+      return `<tr class="${id === this.me.id ? 'me' : ''}"><td>${i === 0 && last ? '👑' : ord(i + 1)}</td><td><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}</td><td><b>${pts}</b> <small>+${got}</small></td></tr>`;
+    });
+    const up = last ? '' : `<p class="hintsm">Next: ${gp.maps.slice(gp.index + 1).map((m) => TRACKS[m].name).join(' → ')}</p>`;
+    return `<h3>Championship</h3><table class="gpTable"><tbody>${rows.join('')}</tbody></table>${up}`;
   }
 
   sendSnapshot(now) {
@@ -1105,6 +1221,7 @@ export class RaceGame {
       const prevLap = me.lap;
       const ev = me.step(dt, input, this.track, all, this.fr);
       this.carEvents(me, ev, true);
+      this.achieve(dt, ev, racing && me.inRace && !me.finished, me.lap > prevLap && prevLap >= 1);
       if (racing && me.inRace && me.lap > prevLap && !me.finished) {
         if (me.lap > this.laps) {
           const time = now - this.goAt;
@@ -1202,6 +1319,54 @@ export class RaceGame {
       this.hud.center('SLOPPY LANDING', 'finish your trick before you land', 1300);
       this.sfx.play('hurt', 0.5);
     }
+  }
+
+  /** Watch the local car for achievements (see achievements.js). */
+  achieve(dt, ev, racing, lapDone) {
+    const me = this.me, a = (this.ach ||= { phase: '', t: {} });
+    const hold = (key, on, secs, id) => {
+      a.t[key] = on ? (a.t[key] || 0) + dt : 0;
+      if (a.t[key] >= secs) unlock(id, this.sfx);
+    };
+    const pos = this.standings().indexOf(me) + 1;
+    if (this.phase !== a.phase) {
+      a.phase = this.phase;
+      if (this.phase === 'racing') {
+        // Fresh race: reset the wall and overtake trackers
+        a.wall = a.raceWall = false;
+        a.lapPos = 0;
+        if (this.bots.length >= 20 && me.inRace) unlock('crowd', this.sfx);
+        if (this.mods.size > 1.5) unlock('kaiju', this.sfx);
+        if (this.mods.size < 0.8) unlock('pocket', this.sfx);
+      }
+    }
+    if (ev.bump > 4) a.wall = a.raceWall = true;
+    if (racing) {
+      if (!a.lapPos) a.lapPos = pos;
+      if (lapDone) {
+        if (!a.wall) unlock('cleanLap', this.sfx);
+        if (a.lapPos - pos >= 3) unlock('overtaker', this.sfx);
+        a.wall = false;
+        a.lapPos = pos;
+      }
+    }
+    if (ev.trick) {
+      unlock('stunt', this.sfx);
+      if (ev.trick.count >= 3) unlock('showboat', this.sfx);
+    }
+    if (ev.landed && ev.air >= 1.5) unlock('flyer', this.sfx);
+    if (ev.route) unlock('detour', this.sfx);
+    if (ev.key) unlock('locksmith', this.sfx);
+    if (ev.crashed) unlock('wipeout', this.sfx);
+    if (me.driftT >= 3) unlock('driftKing', this.sfx);
+    hold('draft', me.drafting, 3, 'slipstream');
+    hold('ceiling', !me.flying && me.crashT <= 0 && me.up.y < -0.8, 1, 'ceiling');
+    hold('back', me.v < -8, 2, 'wrongWay');
+    if (Math.abs(me.v) * 3.2 >= 230) unlock('warp', this.sfx);
+    // A whole tank of nitro in one burn
+    if (me.boosting && !a.burning && me.boost >= 0.95) a.burning = true;
+    if (!me.boosting) a.burning = false;
+    if (a.burning && me.boost <= 0.03) unlock('fullSend', this.sfx);
   }
 
   /** Wind lines streaming past a car that's drafting. */
@@ -1403,6 +1568,13 @@ export class RaceGame {
     });
     hud.set('board', hud.el.board, 'html', rows.join(''));
     if ((this.mapTick = (this.mapTick || 0) + 1) % 2 === 0) this.drawMinimap();
+  }
+
+  /** A new random soundtrack for this map (Neon Junction keeps its own tune). */
+  playMapMusic() {
+    const song = musicFor(this.mapId);
+    this.sfx.playMusic(song);
+    if (song.label) this.hud.toast(`🎵 ${song.label}`);
   }
 
   onResize() {

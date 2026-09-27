@@ -31,9 +31,10 @@
             <h3>Host a game</h3>
             <div class="seg" id="modeSeg">
               <button data-mode="race" class="on">🏁 Race</button>
+              <button data-mode="gp">🏆 Grand Prix</button>
               <button data-mode="battle">💥 Battle</button>
             </div>
-            <label>Map <select id="map"></select></label>
+            <label><span id="mapLabel">Map</span> <select id="map"></select></label>
             <div id="mapPreview" class="mapPreview"><div class="shot"></div><p class="facts"></p></div>
             <div class="row2">
               <label>AI cars
@@ -147,6 +148,8 @@
       <div class="panel small">
         <h2>🏁 Race results</h2>
         <table><tbody></tbody></table>
+        <div class="gpWrap"></div>
+        <div class="achWrap"></div>
         <p class="hint"></p>
         <button id="startRace" class="primary">Race again</button>
       </div>

@@ -4,6 +4,8 @@ import { Kart } from './kart.js';
 import { CARS, CAR_IDS, carThumbnail, statBarsHTML } from './cars.js';
 import { Fx, SkidMarks } from './fx.js';
 import { BotBrain, BOT_NAMES, botColor } from './bots.js';
+import { musicFor } from './music.js';
+import { unlock } from './achievements.js';
 import { Hud } from './hud.js';
 import { WEAPONS, SLOTS, MAX_AMMO_MULT, projectileMesh, botPreference } from './weapons.js';
 
@@ -85,7 +87,7 @@ export class Game {
 
     this.hud.show();
     this.sfx.setCar(this.me.carType);
-    this.sfx.playMusic('battle');
+    this.playMapMusic();
     window.addEventListener('resize', () => this.onResize());
     this.last = performance.now();
     requestAnimationFrame((t) => this.frame(t));
@@ -1124,8 +1126,18 @@ export class Game {
       this.hud.center(`BLASTED ${victim.name.toUpperCase()}`, '', 1500);
       this.hud.hit(true);
       this.sfx.play('kill');
+      // Achievements
+      const now = performance.now();
+      unlock('firstBlood', this.sfx);
+      if (now - (this.lastKillAt || -1e9) < 4000) unlock('double', this.sfx);
+      this.lastKillAt = now;
+      this.streak = (this.streak || 0) + 1;
+      if (this.streak >= 5) unlock('rampage', this.sfx);
+      if (m.w === 'rocket') unlock('rocketSci', this.sfx);
+      if (this.me.drifting) unlock('driftKill', this.sfx);
     }
     if (m.v === this.me.id) {
+      this.streak = 0;
       this.killerId = m.by !== m.v ? m.by : null;
       this.hud.center('WRECKED', killer && m.by !== m.v ? `Blasted by ${killer.name}` : '', 0);
     }
@@ -1333,6 +1345,7 @@ export class Game {
   kartEvents(k, ev) {
     const vol = k === this.me ? 1 : this.volAt(k.pos);
     if (ev.jumped) this.sfx.play('jump', vol * 0.8);
+    if (ev.jumped && k === this.me) unlock('bounce', this.sfx);
     if (ev.impact > 8) {
       this.sfx.play('bump', vol * Math.min(1, ev.impact / 30));
       if (k === this.me) this.shake = Math.max(this.shake, Math.min(0.5, ev.impact / 60));
@@ -1367,6 +1380,13 @@ export class Game {
       cam.fov += (fov - cam.fov) * Math.min(1, dt * 6);
       cam.updateProjectionMatrix();
     }
+  }
+
+  /** A new random soundtrack for this map (Neon Junction keeps its own tune). */
+  playMapMusic() {
+    const song = musicFor(this.mapId);
+    this.sfx.playMusic(song);
+    if (song.label) this.hud.toast(`🎵 ${song.label}`);
   }
 
   onResize() {

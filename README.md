@@ -1,11 +1,25 @@
 # Kart Blasters 🏎️💥
 
-A browser-based, peer-to-peer multiplayer car game with two modes:
+A browser-based, peer-to-peer multiplayer car game with three modes:
 
-- **🏁 Race:** Hot Wheels–style stunt tracks with loops, corkscrews, a helix spiral, banked turns, jumps and boost pads. Race your friends and AI cars over 1 to 5 laps.
+- **🏁 Race:** Hot Wheels–style stunt tracks with loops, corkscrews, a helix spiral, banked turns, jumps and boost pads. Race your friends and up to 20 AI cars over 1 to 20 laps.
+- **🏆 Grand Prix:** race a cup of tracks back to back for championship points (15, 12, 10, 8, 7, 6, 5, 4, 3, 2, 1 down the order). Cups: Classic (the six original tracks), Epic (the two-minute tracks), Everything (every track) and Random (four random tracks). After each race the results show the championship table; the host's button loads the next track for everyone, and the last race crowns a champion.
 - **💥 Battle:** a Shell Shockers–style arena. Your car has a roof turret: aim with the mouse and blast your friends and the AI enemy cars with blasters and rockets.
 
 Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no game server: the host's browser is the hub.
+
+## Options
+
+- **AI cars:** none up to 20 (race and battle). Big fields line up three abreast.
+- **Laps:** 1 up to 20.
+- **Car size:** 🐭 Tiny, Normal or 🐘 Giant for everyone (the camera, lane limits and battle collisions scale to match).
+- **♾️ Endless nitro:** boost never runs out.
+
+The host's choices apply to everyone who joins.
+
+## Achievements
+
+Just for fun: achievements pop up as you earn them (things like *Clean Lap: complete a lap without hitting the wall!*, *Drift King*, *Frequent Flyer*, *Ceiling Walker*, *Slipstreamer*, *Photo Finish*, *Grand Champion*, and battle ones like *Double Trouble* and *Rocket Science*). Nothing is saved: they last until you reload the page, and the ones you have show on the results screen.
 
 ## Cars
 
@@ -137,7 +151,7 @@ Take the jumps fast: if you come up short, you wipe out and respawn past the lan
   | Dice Rod | Rodded old-school V8 (low rumble) |
   | Soundbreaker | Twin jet (turbine whine and roar) |
 
-- **Music:** a procedurally generated soundtrack, with one tune per map style and one for battle. Toggle it with the 🎵 checkbox in the menu or pause screen, or press **N**. **M** mutes everything.
+- **Music:** a procedurally generated soundtrack. Every time a map loads it gets a brand new random song (the style, key, tempo, chords, grooves and hook are all rolled fresh; a toast shows what's playing): house, synthwave, chiptune, trance, drum & bass or disco funk. Gyrosphere, Skyline Spiral, Chaos Crossing, Twin Peaks and the Stadium arena always get house (four-on-the-floor kick, claps, off-beat open hats, piano chord stabs and a pumping sidechained pad). Neon Junction keeps its own signature tune. Toggle music with the 🎵 checkbox in the menu or pause screen, or press **N**. **M** mutes everything.
 
 ### Playing on a phone
 
@@ -186,7 +200,20 @@ VITE_PEER_SECURE=true
 
 ### Connection trouble?
 
-WebRTC uses STUN to punch through home routers, which works for most people. Some strict networks (certain corporate, school or mobile carrier NATs) need a TURN relay server. If you can't connect, try a different network or add TURN servers via `VITE_ICE_SERVERS` (a JSON array of RTCIceServer objects).
+WebRTC uses STUN to punch through home routers, which works for most people. Some strict networks (certain corporate, school or mobile carrier NATs) need a TURN relay server, which passes the game traffic along when two players can't reach each other directly.
+
+To add one:
+
+1. Get TURN credentials from a TURN provider (for example Metered, Twilio or Cloudflare), or run your own with coturn.
+2. In Vercel: Project → Settings → Environment Variables, add `VITE_ICE_SERVERS` with a JSON array of RTCIceServer objects. Include a STUN server too, because this list replaces PeerJS's defaults:
+
+   ```json
+   [{"urls":"stun:stun.l.google.com:19302"},{"urls":["turn:YOUR.TURN.HOST:80","turn:YOUR.TURN.HOST:443?transport=tcp","turns:YOUR.TURN.HOST:443?transport=tcp"],"username":"YOUR_USERNAME","credential":"YOUR_PASSWORD"}]
+   ```
+
+3. Redeploy (Vite bakes `VITE_` variables in at build time).
+
+Note that anything in a `VITE_` variable ends up in the public JavaScript, so anyone could find these credentials and use your TURN allowance. Use a provider plan with a usage cap, or credentials you can rotate.
 
 ## Promo ad
 
