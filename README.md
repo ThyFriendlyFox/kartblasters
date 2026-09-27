@@ -202,18 +202,17 @@ VITE_PEER_SECURE=true
 
 WebRTC uses STUN to punch through home routers, which works for most people. Some strict networks (certain corporate, school or mobile carrier NATs) need a TURN relay server, which passes the game traffic along when two players can't reach each other directly.
 
-To add one:
+**Cloudflare TURN (built in):** the game asks its own `/api/turn` function (`api/turn.js`, a Vercel serverless function) for short-lived Cloudflare TURN credentials before connecting. Your Cloudflare API token stays on the server; players only ever see credentials that expire after 12 hours. To turn it on:
 
-1. Get TURN credentials from a TURN provider (for example Metered, Twilio or Cloudflare), or run your own with coturn.
-2. In Vercel: Project → Settings → Environment Variables, add `VITE_ICE_SERVERS` with a JSON array of RTCIceServer objects. Include a STUN server too, because this list replaces PeerJS's defaults:
+1. In the Cloudflare dashboard, create a TURN key (Realtime → TURN). It gives you a **Turn Token ID** and an **API Token**.
+2. In Vercel: Project → Settings → Environment Variables, add (for Production, and Preview if you like):
+   - `CLOUDFLARE_TURN_KEY_ID` = the Turn Token ID
+   - `CLOUDFLARE_TURN_API_TOKEN` = the API Token
 
-   ```json
-   [{"urls":"stun:stun.l.google.com:19302"},{"urls":["turn:YOUR.TURN.HOST:80","turn:YOUR.TURN.HOST:443?transport=tcp","turns:YOUR.TURN.HOST:443?transport=tcp"],"username":"YOUR_USERNAME","credential":"YOUR_PASSWORD"}]
-   ```
+   No `VITE_` prefix: these must stay server-side.
+3. Redeploy. Check it works by opening `https://your-site/api/turn`: you should see an `iceServers` list with `turn.cloudflare.com` addresses.
 
-3. Redeploy (Vite bakes `VITE_` variables in at build time).
-
-Note that anything in a `VITE_` variable ends up in the public JavaScript, so anyone could find these credentials and use your TURN allowance. Use a provider plan with a usage cap, or credentials you can rotate.
+If `/api/turn` isn't set up (or you're running locally), the game falls back to `VITE_ICE_SERVERS` if you set one (a JSON array of RTCIceServer objects, baked into the public page, so only use credentials you don't mind being public), and otherwise to PeerJS's default STUN servers.
 
 ## Promo ad
 

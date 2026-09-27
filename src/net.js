@@ -5,8 +5,32 @@ import Peer from 'peerjs';
 const PREFIX = 'kartblasters-v1-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-// Optional self-hosted signaling / TURN config via Vite env vars (see README).
-function peerOptions() {
+// ICE servers (STUN + TURN relays). Preferred: short-lived Cloudflare TURN
+// credentials from our own /api/turn function (see api/turn.js). Fallback:
+// a fixed list in VITE_ICE_SERVERS, else PeerJS's default STUN servers.
+let ice = null; // { at, servers }
+async function iceServers() {
+  if (ice && performance.now() - ice.at < 6 * 3600e3) return ice.servers;
+  let servers = null;
+  try {
+    const r = await fetch('/api/turn', { signal: AbortSignal.timeout(4000) });
+    if (r.ok && (r.headers.get('content-type') || '').includes('json')) servers = (await r.json()).iceServers || null;
+  } catch {
+    // Offline, local dev, or TURN not set up: fall through
+  }
+  if (!servers?.length && import.meta.env.VITE_ICE_SERVERS) {
+    try {
+      servers = JSON.parse(import.meta.env.VITE_ICE_SERVERS);
+    } catch {
+      console.warn('Invalid VITE_ICE_SERVERS');
+    }
+  }
+  ice = { at: performance.now(), servers: servers?.length ? servers : null };
+  return ice.servers;
+}
+
+// Optional self-hosted signaling server via Vite env vars (see README).
+async function peerOptions() {
   const env = import.meta.env;
   const opts = { debug: 1 };
   if (env.VITE_PEER_HOST) {
@@ -15,13 +39,8 @@ function peerOptions() {
     opts.path = env.VITE_PEER_PATH || '/';
     opts.secure = env.VITE_PEER_SECURE !== 'false';
   }
-  if (env.VITE_ICE_SERVERS) {
-    try {
-      opts.config = { iceServers: JSON.parse(env.VITE_ICE_SERVERS) };
-    } catch {
-      console.warn('Invalid VITE_ICE_SERVERS');
-    }
-  }
+  const servers = await iceServers();
+  if (servers) opts.config = { iceServers: servers };
   return opts;
 }
 
@@ -73,10 +92,11 @@ export class Net {
     throw new Error('Could not reserve a room code, try again.');
   }
 
-  _openHost(code) {
+  async _openHost(code) {
+    const opts = await peerOptions();
     return new Promise((resolve, reject) => {
       this.isHost = true;
-      const peer = new Peer(PREFIX + code, peerOptions());
+      const peer = new Peer(PREFIX + code, opts);
       let opened = false;
       peer.on('open', (id) => {
         opened = true;
@@ -103,9 +123,10 @@ export class Net {
     });
   }
 
-  joinGame(code) {
+  async joinGame(code) {
+    const opts = await peerOptions();
     return new Promise((resolve, reject) => {
-      const peer = new Peer(peerOptions());
+      const peer = new Peer(opts);
       this.peer = peer;
       let done = false;
       const fail = (err) => {
