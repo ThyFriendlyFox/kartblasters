@@ -102,8 +102,15 @@ select option { background: #151923; }
 }
 .swatch.on { border-color: #fff; transform: scale(1.12); }
 
-.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-@media (max-width: 560px) { .cols { grid-template-columns: 1fr; } }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.card h3 { margin-top: 0; }
+.card > .primary { margin-top: 6px; }
+.joinRow { display: flex; gap: 10px; margin-bottom: 8px; }
+.joinRow input { flex: 1; min-width: 0; margin: 0; letter-spacing: 4px; text-transform: uppercase; }
+.joinRow button.primary { flex: none; width: auto; padding-left: 26px; padding-right: 26px; }
+.joinCard .hintsm { margin: 0; }
+/* Option rows: checkboxes sit level with the dropdowns beside them */
+.row2 label.check { flex-wrap: nowrap; align-self: end; min-height: 44px; margin-bottom: 12px; }
 .card {
   background: rgba(255, 255, 255, 0.04);
   border-radius: 14px;

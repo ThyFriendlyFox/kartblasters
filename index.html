@@ -73,11 +73,13 @@
             <label id="destructWrap" class="check hidden"><input type="checkbox" id="destruct" checked /> 💣 Destructible terrain <small>rockets dig craters, walls break apart</small></label>
             <button id="host" class="primary">Create room</button>
           </div>
-          <div class="card">
+          <div class="card joinCard">
             <h3>Join a friend</h3>
-            <label>Room code <input id="code" maxlength="5" placeholder="ABCDE" autocomplete="off" /></label>
-            <p class="hintsm">The host picks the mode and map. You bring your own car.</p>
-            <button id="join" class="primary">Join room</button>
+            <div class="joinRow">
+              <input id="code" maxlength="5" placeholder="ABCDE" aria-label="Room code" autocomplete="off" />
+              <button id="join" class="primary">Join room</button>
+            </div>
+            <p class="hintsm">The host picks the mode, map and options. You bring your own car.</p>
           </div>
         </div>
         <button id="practice" class="ghost">Practice offline vs AI</button>
