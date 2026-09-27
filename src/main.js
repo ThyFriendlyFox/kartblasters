@@ -218,7 +218,7 @@ function start(net, code, opts) {
 function hostOpts() {
   store.set('kb-destruct', $('destruct').checked ? '1' : '0');
   // Silly modifiers, chosen by the host and shared with everyone who joins
-  const mods = { size: +$('carSize').value, endless: $('endless').checked };
+  const mods = { size: +$('carSize').value, endless: $('endless').checked, damage: $('wallDamage').checked };
   const gp = mode === 'gp' ? [...cupMaps($('map').value)] : null;
   return { mode, map: gp ? gp[0] : $('map').value, gp, botCount: +$('bots').value, laps: +$('laps').value, destructible: $('destruct').checked, mods };
 }

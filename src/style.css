@@ -407,6 +407,7 @@ body.mode-race #rockets,
 body.mode-race #rockets + small,
 body.mode-race #crosshair,
 body.mode-race #hitmarker { display: none; }
+body.mode-race.dmg-on .bar.hp { display: block; } /* Wall damage option */
 body.mode-race .bar.boost { height: 22px; }
 body.mode-race .bar.boost span { line-height: 22px; font-size: 12px; }
 #raceHud {

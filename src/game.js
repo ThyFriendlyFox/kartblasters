@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { buildArena, pointBlocked } from './arena.js';
 import { Kart } from './kart.js';
-import { CARS, CAR_IDS, carThumbnail, statBarsHTML } from './cars.js';
+import { CARS, CAR_IDS, wallDamage, carThumbnail, statBarsHTML } from './cars.js';
 import { Fx, SkidMarks } from './fx.js';
 import { BotBrain, BOT_NAMES, botColor } from './bots.js';
 import { musicFor } from './music.js';
@@ -30,7 +30,7 @@ const Z = new THREE.Vector3(0, 0, 1);
 export class Game {
   constructor({ net, name, color, car, botCount, sfx, code, welcome, map = 'stadium', destructible = false, mobile = null, mods = {} }) {
     this.mobile = mobile;
-    this.mods = { size: 1, endless: false, ...(welcome?.mods || mods) };
+    this.mods = { size: 1, endless: false, damage: false, ...(welcome?.mods || mods) };
     document.body.classList.add('mode-battle');
     this.net = net;
     this.sfx = sfx;
@@ -1101,7 +1101,7 @@ export class Game {
       k.hp = 0;
       k.alive = false;
       k.respawnAt = now + RESPAWN_MS;
-      const m = { t: 'k', v: id, by, w: WEAPONS[weapon] ? weapon : 'blaster' };
+      const m = { t: 'k', v: id, by, w: WEAPONS[weapon] || weapon === 'wall' ? weapon : 'blaster' };
       this.net.send(m);
       this.onKill(m);
     }
@@ -1236,6 +1236,10 @@ export class Game {
       this.lastThrottle = input.throttle;
       const ev = me.simulate(dt, input, this.world, all);
       this.kartEvents(me, ev);
+      if (this.mods.damage && ev.wall && wallDamage(ev.wall) > 0) {
+        this.damageMe(wallDamage(ev.wall), me.id, 'wall', now, null, wallDamage(ev.wall) < 8);
+        if (!me.alive) unlock('demolition', this.sfx);
+      }
       if (me.burnT > 0) {
         me.burnT -= dt;
         if (Math.random() < 0.5) this.fx.spawn({ color: Math.random() < 0.5 ? '#ff7b1c' : '#ffd166', pos: _a.set(me.pos.x + (Math.random() - 0.5) * 2, me.pos.y + 1, me.pos.z + (Math.random() - 0.5) * 2), vel: _b.set(0, 4, 0), life: 0.4, size: 0.5, grow: 2, additive: true });
@@ -1269,6 +1273,7 @@ export class Game {
       this.botWeapon(kart, brain);
       const ev = kart.simulate(dt, input, this.world, all);
       this.kartEvents(kart, ev);
+      if (this.mods.damage && wallDamage(ev.wall) > 0) this.applyBotDamage(kart.id, wallDamage(ev.wall), kart.id, 'wall', now);
       if (input.fire) this.tryFire(kart, kart.weapon, now);
       if (input.rocket) this.tryFire(kart, 'rocket', now);
     }

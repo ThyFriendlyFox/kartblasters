@@ -149,3 +149,13 @@ export function carThumbnail(type, color, size = 96) {
   });
   return url;
 }
+
+/**
+ * Wall damage (the "Wall damage" option): nothing for a light scrape, then
+ * more than proportionally more the harder you hit. `speed` is how fast the
+ * car was going into the wall. About 15 HP at 15, 48 at 30, 120+ at 55.
+ */
+export function wallDamage(speed) {
+  const s = speed - 6;
+  return s > 0 ? s * 1.5 + s * s * 0.02 : 0;
+}

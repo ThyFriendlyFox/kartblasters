@@ -210,7 +210,7 @@ export class Kart {
    * Returns info about events (jump pad, impacts) for sound / fx.
    */
   simulate(dt, input, world, others) {
-    const ev = { impact: 0, jumped: false };
+    const ev = { impact: 0, wall: 0, jumped: false };
     const fwd = this.forward();
     let vF = this.vel.x * fwd.x + this.vel.z * fwd.z;
     let latX = this.vel.x - fwd.x * vF;
@@ -301,7 +301,8 @@ export class Kart {
     }
 
     const rad = KART_RADIUS * (this.sizeMul || 1);
-    ev.impact = Math.max(ev.impact, collideWorld(world, this.pos, this.vel, rad));
+    ev.wall = collideWorld(world, this.pos, this.vel, rad); // speed into walls and cover
+    ev.impact = Math.max(ev.impact, ev.wall);
 
     // Kart vs kart bumping (we only move ourselves; the other side does the same)
     for (const o of others) {

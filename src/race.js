@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Track, Path } from './track.js';
 import { TRACKS } from './trackdefs.js';
-import { buildCar, CARS, CAR_IDS } from './cars.js';
+import { buildCar, CARS, CAR_IDS, wallDamage } from './cars.js';
 import { Fx, SkidMarks } from './fx.js';
 import { BOT_NAMES, botColor } from './bots.js';
 import { musicFor } from './music.js';
@@ -80,6 +80,8 @@ export class RaceCar {
     this.flipT = 0;
     this.driftT = 0;
     this.bodyYaw = 0;
+    this.maxHp = this.stats.hp; // only matters with the Wall damage option
+    this.hp = this.maxHp;
     this.draftT = 0; // time spent in another car's slipstream
     this.drafting = false;
 
@@ -466,6 +468,7 @@ export class RaceCar {
   respawn(track, fr) {
     const path = track.pathOf(this.route);
     this.resetTricks();
+    this.hp = this.maxHp; // back on track fully repaired
     // Fell short of a jump: put the car down just past the landing so it can't get stuck retrying
     for (const g of path.gaps) {
       const into = path.delta(g.start, this.s);
@@ -507,6 +510,7 @@ export class RaceCar {
     this.boosting = !!e[14];
     this.inRace = !!e[15];
     this.drifting = !!e[19];
+    if (e[21] != null) this.hp = e[21];
     this.netTime = now;
     if (!this.hasNet || this.net.route !== this.route) {
       this.route = this.net.route;
@@ -697,7 +701,8 @@ export class RaceBrain {
 export class RaceGame {
   constructor({ net, name, color, car, botCount = 0, sfx, code, map, laps = 3, welcome, mobile = null, mods = {}, gp = null }) {
     this.mobile = mobile;
-    this.mods = { size: 1, endless: false, ...(welcome?.mods || mods) };
+    this.mods = { size: 1, endless: false, damage: false, ...(welcome?.mods || mods) };
+    document.body.classList.toggle('dmg-on', !!this.mods.damage);
     // Grand Prix: a list of tracks raced back to back, with points per race
     this.gp = welcome?.gp || (gp ? { maps: gp, index: 0, points: {} } : null);
     this.net = net;
@@ -1174,7 +1179,7 @@ export class RaceGame {
       c.id, r2(c.s), r2(c.d), r2(c.v), r3(c.psi), c.flying ? 1 : 0,
       r2(c.wpos.x), r2(c.wpos.y), r2(c.wpos.z), r2(c.wvel.x), r2(c.wvel.y), r2(c.wvel.z),
       c.lap, c.finished || 0, c.boosting || c.padT > 0 ? 1 : 0, c.inRace ? 1 : 0,
-      c.route, r2(c.spin), r2(c.flip), c.drifting ? 1 : 0, r2(c.steerVis),
+      c.route, r2(c.spin), r2(c.flip), c.drifting ? 1 : 0, r2(c.steerVis), Math.round(c.hp),
     ];
     const e = [snap(this.me)];
     for (const b of this.bots) e.push(snap(b.car));
@@ -1254,6 +1259,7 @@ export class RaceGame {
       c.updateVisual(dt, open || c.inRace || (c.local && this.phase !== 'spectate'));
       this.driftFx(c);
       this.draftFx(c);
+      this.damageFx(c);
     }
     this.sfx.screech(me.drifting && !me.flying ? Math.min(1, 0.5 + me.driftT) : 0);
 
@@ -1299,6 +1305,27 @@ export class RaceGame {
       this.fx.explosion(c.wpos.clone(), c.color, 1.3);
       this.sfx.play('explode', vol);
       if (isMe) this.hud.center('WIPEOUT!', 'Respawning…', 1300);
+    }
+    // Wall damage option: the harder the hit, the bigger the dent
+    if (this.mods.damage && ev.bump > 0 && c.crashT <= 0 && (isMe || c.bot)) {
+      const dmg = wallDamage(ev.bump);
+      if (dmg > 0) {
+        c.hp -= dmg;
+        if (isMe && dmg > 8) this.hud.damage?.(dmg);
+        if (c.hp <= 0) {
+          // Wrecked: blow up and respawn repaired, like a missed jump
+          c.hp = 0;
+          c.crashT = 1.6;
+          c.v = 0;
+          c.resetTricks();
+          this.fx.explosion(c.wpos.clone(), c.color, 1.5);
+          this.sfx.play('explode', vol);
+          if (isMe) {
+            this.hud.center('WRECKED!', 'Too many wall hits · respawning…', 1600);
+            unlock('demolition', this.sfx);
+          }
+        }
+      }
     }
     if (!isMe) return;
     if (ev.key) {
@@ -1367,6 +1394,16 @@ export class RaceGame {
     if (me.boosting && !a.burning && me.boost >= 0.95) a.burning = true;
     if (!me.boosting) a.burning = false;
     if (a.burning && me.boost <= 0.03) unlock('fullSend', this.sfx);
+  }
+
+  /** Wall damage option: dark smoke from a battered car, flames when it's nearly done. */
+  damageFx(c) {
+    if (!this.mods.damage || !c.root.visible || c.crashT > 0) return;
+    const f = c.hp / c.maxHp;
+    if (f > 0.5 || Math.random() > (f < 0.25 ? 0.7 : 0.35)) return;
+    const p = new THREE.Vector3().copy(c.wpos).addScaledVector(c.up, 1.1 * this.mods.size).addScaledVector(c.fwd, 0.8 * this.mods.size);
+    this.fx.puff(p, f < 0.25 ? '#2a2a2a' : '#6b6b6b', 0.5 * this.mods.size);
+    if (f < 0.25) this.fx.spark(p, Math.random() < 0.5 ? '#ff7b1c' : '#ffd166');
   }
 
   /** Wind lines streaming past a car that's drafting. */
@@ -1544,6 +1581,12 @@ export class RaceGame {
     document.getElementById('draft').classList.toggle('on', !!me.drafting && !me.flying && this.phase !== 'spectate');
     set('rKeys', [...me.keys].map((id) => `🔑 ${this.track.branches.find((b) => b.lock === id)?.name || 'KEY'}`).join('  '));
     hud.set('rb', document.getElementById('boostFill'), 'width', `${Math.round(me.boost * 100)}%`);
+    if (this.mods.damage) {
+      const f = Math.max(0, me.hp) / me.maxHp;
+      hud.set('hpw', hud.el.hpFill, 'width', `${Math.round(f * 100)}%`);
+      hud.set('hpt', hud.el.hpText, 'text', `${Math.max(0, Math.round(me.hp))}`);
+      hud.el.hpFill.style.background = f > 0.5 ? '#4ade80' : f > 0.25 ? '#facc15' : '#ef4444';
+    }
 
     const lobbyMsg = document.getElementById('lobbyMsg');
     let msg = '';

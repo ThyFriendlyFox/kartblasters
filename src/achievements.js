@@ -18,6 +18,7 @@ export const ACHIEVEMENTS = {
   detour: { icon: '🗺️', name: 'Road Less Travelled', desc: 'Take an alternate route' },
   locksmith: { icon: '🔑', name: 'Locksmith', desc: 'Grab a golden key' },
   wipeout: { icon: '💥', name: 'Wipeout', desc: 'Crash spectacularly' },
+  demolition: { icon: '🧱', name: 'Demolition Derby', desc: 'Get wrecked by hitting walls (Wall damage on)' },
   wrongWay: { icon: '↩️', name: 'Wrong Way!', desc: 'Drive backwards for 2 seconds' },
   overtaker: { icon: '🏎️', name: 'Overtaker', desc: 'Gain 3 places in one lap' },
   podium: { icon: '🥉', name: 'Podium', desc: 'Finish a race in the top 3' },

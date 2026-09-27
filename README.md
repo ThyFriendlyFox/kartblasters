@@ -14,6 +14,7 @@ Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no ga
 - **Laps:** 1 up to 20.
 - **Car size:** 🐭 Tiny, Normal or 🐘 Giant for everyone (the camera, lane limits and battle collisions scale to match).
 - **♾️ Endless nitro:** boost never runs out.
+- **💥 Wall damage:** hitting walls damages your car, and the harder the hit (how fast you're going into the wall) the bigger the damage: a light scrape is free, a firm knock costs around 10-25 HP, a head-on slam can wreck you in one go. Races show a health bar; battered cars smoke, then burn; at zero you're wrecked and respawn fully repaired. In battle, walls and cover hurt too, on top of weapon damage.
 
 The host's choices apply to everyone who joins.
 

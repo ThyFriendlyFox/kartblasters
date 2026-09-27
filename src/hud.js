@@ -81,7 +81,7 @@ export class Hud {
   killFeed(killer, victim, weapon) {
     const icon = WEAPONS[weapon]?.icon || '⚡';
     if (!killer || killer === victim) {
-      this.feed(`<span style="color:${esc(victim.color)}">${esc(victim.name)}</span> 💥 wrecked`);
+      this.feed(`<span style="color:${esc(victim.color)}">${esc(victim.name)}</span> 💥 ${weapon === 'wall' ? 'hit the wall too hard' : 'wrecked'}`);
       return;
     }
     this.feed(`<span style="color:${esc(killer.color)}">${esc(killer.name)}</span> ${icon} <span style="color:${esc(victim.color)}">${esc(victim.name)}</span>`);
