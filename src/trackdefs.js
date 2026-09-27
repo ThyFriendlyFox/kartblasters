@@ -28,8 +28,8 @@ export class TrackTurtle {
     return new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
   }
 
-  emit(p, { gap = false, boost = false, kick = false, up = null } = {}) {
-    this.pts.push({ p: p.clone(), roll: this.roll, gap, boost, kick, color: this.col, up });
+  emit(p, { gap = false, boost = false, kick = false, up = null, loop = false } = {}) {
+    this.pts.push({ p: p.clone(), roll: this.roll, gap, boost, kick, color: this.col, up, loop });
   }
 
   paint(color) {
@@ -115,7 +115,7 @@ export class TrackTurtle {
         .addScaledVector(d, radius * Math.sin(th))
         .addScaledVector(UP, radius * (1 - Math.cos(th)))
         .addScaledVector(r, lat);
-      this.emit(this.pos, {});
+      this.emit(this.pos, { loop: true });
     }
     return this;
   }

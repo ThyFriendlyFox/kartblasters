@@ -46,6 +46,7 @@ export class Path {
     const np = pts.length;
     const roll = new Float32Array(n);
     const upAt = new Array(n).fill(null); // explicit up (corkscrews)
+    const loopAt = new Uint8Array(n); // inside a vertical loop
     const v = new THREE.Vector3(), t = new THREE.Vector3();
     for (let i = 0; i < n; i++) {
       const u = closed ? i / n : i / (n - 1);
@@ -59,6 +60,7 @@ export class Path {
       const a = pts[i0], b = pts[i1];
       roll[i] = a.roll + wrapAngle(b.roll - a.roll) * fr;
       if (a.up && b.up) upAt[i] = a.up.clone().lerp(b.up, fr).normalize();
+      if (a.loop || b.loop) loopAt[i] = 1;
       this.gap[i] = a.gap && b.gap ? 1 : a.gap && fr < 0.5 ? 1 : b.gap && fr >= 0.5 ? 1 : 0;
       this.boost[i] = (fr < 0.5 ? a.boost : b.boost) ? 1 : 0;
       this.kick[i] = a.kick || b.kick ? 1 : 0;
@@ -157,7 +159,8 @@ export class Path {
     // entry to their exit, so no twist is left over for the straights.
     if (flat && closed) {
       // Corkscrews are targets too (their tube's axis); loops are blended
-      const stunt = (i) => !upAt[i] && Math.abs(T[i * 3 + 1]) > 0.55;
+      // (loops are left entirely to parallel transport: level is wrong over the top)
+      const stunt = (i) => !upAt[i] && (loopAt[i] || Math.abs(T[i * 3 + 1]) > 0.55);
       const c = new Float64Array(n + 1);
       const ok = new Uint8Array(n + 1);
       const up = new THREE.Vector3(), nv = new THREE.Vector3(), cr = new THREE.Vector3();
