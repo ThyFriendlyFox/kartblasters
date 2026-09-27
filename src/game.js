@@ -3,7 +3,7 @@ import { buildArena, pointBlocked } from './arena.js';
 import { Kart } from './kart.js';
 import { CARS, CAR_IDS, carThumbnail, statBarsHTML } from './cars.js';
 import { Fx, SkidMarks } from './fx.js';
-import { BotBrain, BOT_NAMES } from './bots.js';
+import { BotBrain, BOT_NAMES, botColor } from './bots.js';
 import { Hud } from './hud.js';
 import { WEAPONS, SLOTS, MAX_AMMO_MULT, projectileMesh, botPreference } from './weapons.js';
 
@@ -26,8 +26,9 @@ const _dir = new THREE.Vector3();
 const Z = new THREE.Vector3(0, 0, 1);
 
 export class Game {
-  constructor({ net, name, color, car, botCount, sfx, code, welcome, map = 'stadium', destructible = false, mobile = null }) {
+  constructor({ net, name, color, car, botCount, sfx, code, welcome, map = 'stadium', destructible = false, mobile = null, mods = {} }) {
     this.mobile = mobile;
+    this.mods = { size: 1, endless: false, ...(welcome?.mods || mods) };
     document.body.classList.add('mode-battle');
     this.net = net;
     this.sfx = sfx;
@@ -170,6 +171,9 @@ export class Game {
   makeKart(opts) {
     const k = new Kart(this.scene, opts);
     k.world = this.world;
+    k.sizeMul = this.mods.size;
+    k.root.scale.setScalar(this.mods.size);
+    k.endless = this.mods.endless;
     return k;
   }
 
@@ -177,7 +181,7 @@ export class Game {
     const id = `bot-${i}`;
     const name = BOT_NAMES[i % BOT_NAMES.length];
     const palette = COLORS.filter((c) => c !== this.me.color);
-    const color = palette[(i + 2) % palette.length];
+    const color = botColor(i, palette);
     const car = CAR_IDS[Math.floor(Math.random() * CAR_IDS.length)];
     const kart = this.makeKart({ id, name, color, car, bot: true });
     this.karts.set(id, kart);
@@ -386,6 +390,7 @@ export class Game {
           t: 'welcome',
           mode: 'battle',
           map: this.mapId,
+          mods: this.mods,
           destructible: this.destructible,
           digs: this.digs,
           broken: this.world.pieces.filter((b) => b.dead).map((b) => b.id),
@@ -1340,8 +1345,9 @@ export class Game {
     const yaw = me.aimYaw, pitch = me.aimPitch;
     const cp = Math.cos(pitch);
     _dir.set(Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp);
-    const base = _a.set(me.pos.x, me.pos.y + 2.8, me.pos.z);
-    let dist = me.alive ? 8.5 : 14;
+    const zoom = this.mods.size < 1 ? 0.8 : 1 + (this.mods.size - 1) * 0.55; // giant cars: pull back
+    const base = _a.set(me.pos.x, me.pos.y + 2.8 * zoom, me.pos.z);
+    let dist = (me.alive ? 8.5 : 14) * zoom;
     // Pull the camera in if an obstacle is between it and the kart
     for (let d = 1; d <= dist; d += 0.5) {
       if (pointBlocked(this.world, base.x - _dir.x * d, base.y - _dir.y * d + 1.4, base.z - _dir.z * d, 0.3)) {

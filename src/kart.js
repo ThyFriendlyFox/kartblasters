@@ -89,6 +89,7 @@ export class Kart {
 
   buildMesh() {
     const root = new THREE.Group();
+    root.scale.setScalar(this.sizeMul || 1); // tiny / giant car option
     const car = buildCar(this.carType, this.color);
     root.add(car.group);
     const body = car.body;
@@ -222,7 +223,7 @@ export class Kart {
     const draft = this.slipstream(fwd, vF, others, dt);
 
     this.boosting = input.boost && input.throttle > 0 && this.boost > 0.02;
-    if (this.boosting) this.boost = Math.max(0, this.boost - dt * 0.38);
+    if (this.boosting && !this.endless) this.boost = Math.max(0, this.boost - dt * 0.38);
     else this.boost = Math.min(1, this.boost + dt * (this.drifting ? 0.3 : 0.12) + dt * 0.12 * draft);
     if (this.boost <= 0.02) this.boosting = false;
 
@@ -299,14 +300,15 @@ export class Kart {
       }
     }
 
-    ev.impact = Math.max(ev.impact, collideWorld(world, this.pos, this.vel, KART_RADIUS));
+    const rad = KART_RADIUS * (this.sizeMul || 1);
+    ev.impact = Math.max(ev.impact, collideWorld(world, this.pos, this.vel, rad));
 
     // Kart vs kart bumping (we only move ourselves; the other side does the same)
     for (const o of others) {
       if (o === this || !o.alive) continue;
       const dx = this.pos.x - o.pos.x, dz = this.pos.z - o.pos.z;
       if (Math.abs(this.pos.y - o.pos.y) > 2) continue;
-      const d2 = dx * dx + dz * dz, min = KART_RADIUS * 2;
+      const d2 = dx * dx + dz * dz, min = rad + KART_RADIUS * (o.sizeMul || 1);
       if (d2 < min * min && d2 > 1e-6) {
         const d = Math.sqrt(d2), nx = dx / d, nz = dz / d;
         this.pos.x += nx * (min - d) * 0.6;

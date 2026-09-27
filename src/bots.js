@@ -1,7 +1,22 @@
 import { pointBlocked } from './arena.js';
 import { angleDiff } from './kart.js';
 
-export const BOT_NAMES = ['Turbo Tina', 'Crash Carl', 'Nitro Nick', 'Drift Dana', 'Rusty Bolt', 'Blaze', 'Skid Vicious', 'Gearbox Gus'];
+export const BOT_NAMES = [
+  'Turbo Tina', 'Crash Carl', 'Nitro Nick', 'Drift Dana', 'Rusty Bolt', 'Blaze', 'Skid Vicious', 'Gearbox Gus',
+  'Piston Pam', 'Burnout Bev', 'Wheelie Walt', 'Loopy Lou', 'Axel Grease', 'Sparky', 'Cam Shaft', 'Holeshot Hal',
+  'Redline Rita', 'Dizzy Dash', 'Oily Ollie', 'Max Revs',
+];
+
+/** Bot colours: the menu palette first, then evenly spread extra hues for big fields. */
+export function botColor(i, palette) {
+  if (i < palette.length) return palette[(i + 2) % palette.length];
+  const h = ((i - palette.length) * 0.618034 + 0.08) % 1, s = 0.75, l = 0.55;
+  const f = (n) => {
+    const k = (n + h * 12) % 12, a = s * Math.min(l, 1 - l);
+    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
 
 export function lineOfSight(world, a, b) {
   const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;

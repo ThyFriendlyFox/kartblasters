@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Track, Path } from './track.js';
 import { buildCar, CARS, CAR_IDS } from './cars.js';
 import { Fx, SkidMarks } from './fx.js';
-import { BOT_NAMES } from './bots.js';
+import { BOT_NAMES, botColor } from './bots.js';
 import { Hud } from './hud.js';
 import { COLORS } from './game.js';
 
@@ -179,7 +179,7 @@ export class RaceCar {
     }
 
     this.boosting = input.boost && input.throttle > 0 && this.boost > 0.02;
-    if (this.boosting) this.boost = Math.max(0, this.boost - dt * 0.4);
+    if (this.boosting && !this.endless) this.boost = Math.max(0, this.boost - dt * 0.4);
     else this.boost = Math.min(1, this.boost + dt * (this.drifting ? 0.3 : 0.05));
 
     if (!this.flying) {
@@ -225,7 +225,7 @@ export class RaceCar {
       this.s += this.v * Math.cos(this.psi) * dt;
       this.d += this.v * Math.sin(this.psi) * dt;
 
-      const lim = path.hw - CAR_HALF_W;
+      const lim = path.hw - CAR_HALF_W * (this.sizeMul || 1);
       let lo = -lim, hi = lim, merging = false;
       if (this.route === 0) {
         // Inside a Y the road is wider: the branch-side lane is drivable too
@@ -692,8 +692,9 @@ export class RaceBrain {
 // ------------------------------------------------------------------ game
 
 export class RaceGame {
-  constructor({ net, name, color, car, botCount = 0, sfx, code, map, laps = 3, welcome, mobile = null }) {
+  constructor({ net, name, color, car, botCount = 0, sfx, code, map, laps = 3, welcome, mobile = null, mods = {} }) {
     this.mobile = mobile;
+    this.mods = { size: 1, endless: false, ...(welcome?.mods || mods) };
     this.net = net;
     this.sfx = sfx;
     this.code = code;
@@ -760,6 +761,9 @@ export class RaceGame {
     let c = this.cars.get(id);
     if (!c) {
       c = new RaceCar(this.scene, { id, name, color, car, local, bot });
+      c.root.scale.setScalar(this.mods.size);
+      c.sizeMul = this.mods.size;
+      c.endless = this.mods.endless;
       this.cars.set(id, c);
     }
     return c;
@@ -768,7 +772,7 @@ export class RaceGame {
   addBot(i) {
     const id = `bot-${i}`;
     const palette = COLORS.filter((c) => c !== this.me.color);
-    const c = this.addCar(id, BOT_NAMES[i % BOT_NAMES.length], palette[(i + 2) % palette.length], CAR_IDS[Math.floor(Math.random() * CAR_IDS.length)], { bot: true });
+    const c = this.addCar(id, BOT_NAMES[i % BOT_NAMES.length], botColor(i, palette), CAR_IDS[Math.floor(Math.random() * CAR_IDS.length)], { bot: true });
     c.topMul = 0.9 + Math.random() * 0.08;
     this.bots.push({ car: c, brain: new RaceBrain() });
   }
@@ -784,8 +788,11 @@ export class RaceGame {
     }
   }
 
+  /** Starting grid: two abreast, or three abreast for big fields so the grid stays short. */
   gridSlot(k) {
-    return { s: -10 - Math.floor(k / 2) * 8, d: k % 2 ? 3.2 : -3.2 };
+    if (this.cars.size <= 8) return { s: -10 - Math.floor(k / 2) * 8, d: k % 2 ? 3.2 : -3.2 };
+    const w = this.track.hw - 2;
+    return { s: -10 - Math.floor(k / 3) * 8, d: [-w, 0, w][k % 3] };
   }
 
   /** In the lobby everyone free-drives; spread cars along the start straight. */
@@ -903,6 +910,7 @@ export class RaceGame {
       mode: 'race',
       map: this.mapId,
       laps: this.laps,
+      mods: this.mods,
       phase: this.phase,
       players: [...this.players.entries()].map(([id, p]) => [id, p.name, p.color, p.car, p.bot ? 1 : 0, p.wins]),
     };
@@ -1243,18 +1251,20 @@ export class RaceGame {
     const cam = this.camera;
     const onTrack = !c.flying && c.crashT <= 0;
     const k = 1 - Math.exp(-(onTrack ? 14 : 7) * dt);
-    const back = c.v < -2 ? -8.5 : 8.5;
+    // Pull the camera back for giant cars (and in a little for tiny ones)
+    const zoom = this.mods.size < 1 ? 0.8 : 1 + (this.mods.size - 1) * 0.55;
+    const back = (c.v < -2 ? -8.5 : 8.5) * zoom;
     // Swing wide of the car while it drifts
     this.camSwing = (this.camSwing || 0) + ((c.drifting ? -c.steerVis * 2.6 : 0) - (this.camSwing || 0)) * Math.min(1, dt * 3);
     // On the road, follow the track's own curve so the camera stays inside loops
-    if (onTrack) this.camPoint(c, -back, c.d * 0.75 + this.camSwing, 3.3, _v);
-    else _v.copy(c.wpos).addScaledVector(c.fwd, -8.5).addScaledVector(c.up, 3.4);
+    if (onTrack) this.camPoint(c, -back, c.d * 0.75 + this.camSwing, 3.3 * zoom, _v);
+    else _v.copy(c.wpos).addScaledVector(c.fwd, -8.5 * zoom).addScaledVector(c.up, 3.4 * zoom);
     if (!this.camInit) {
       cam.position.copy(_v);
       this.camInit = true;
     } else cam.position.lerp(_v, k);
     cam.up.lerp(c.up, 1 - Math.exp(-6 * dt)).normalize();
-    if (onTrack) this.camPoint(c, back > 0 ? 7 : -7, c.d, 1.5, _v);
+    if (onTrack) this.camPoint(c, back > 0 ? 7 : -7, c.d, 1.5 * zoom, _v);
     else _v.copy(c.wpos).addScaledVector(c.up, 1.6).addScaledVector(c.fwd, 7);
     cam.lookAt(_v);
     if (this.shake > 0.01) {
@@ -1381,7 +1391,11 @@ export class RaceGame {
     lobbyMsg.classList.toggle('hidden', !msg);
 
     const list = this.phase === 'lobby' || this.phase === 'spectate' && !standings.length ? [...this.cars.values()] : standings;
-    const rows = list.slice(0, 8).map((c, i) => {
+    // Big fields: the top 7, plus you if you're further back
+    const shown = list.slice(0, 8);
+    if (list.length > 8 && !shown.includes(me) && list.includes(me)) shown.splice(7, 1, me);
+    const rows = shown.map((c) => {
+      const i = list.indexOf(c);
       const p = this.players.get(c.id);
       if (!p) return '';
       const fin = this.results.get(c.id);

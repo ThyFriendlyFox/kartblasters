@@ -196,7 +196,9 @@ function start(net, code, opts) {
 
 function hostOpts() {
   store.set('kb-destruct', $('destruct').checked ? '1' : '0');
-  return { mode, map: $('map').value, botCount: +$('bots').value, laps: +$('laps').value, destructible: $('destruct').checked };
+  // Silly modifiers, chosen by the host and shared with everyone who joins
+  const mods = { size: +$('carSize').value, endless: $('endless').checked };
+  return { mode, map: $('map').value, botCount: +$('bots').value, laps: +$('laps').value, destructible: $('destruct').checked, mods };
 }
 
 $('host').onclick = async () => {
@@ -239,7 +241,7 @@ $('join').onclick = async () => {
       const { name, color, car } = playerInfo();
       net.send({ t: 'hello', name, color, car });
     });
-    start(net, code, { mode: welcome.mode, map: welcome.map, laps: welcome.laps, welcome });
+    start(net, code, { mode: welcome.mode, map: welcome.map, laps: welcome.laps, mods: welcome.mods, welcome });
   } catch (e) {
     console.error(e);
     net.destroy();
