@@ -1163,3 +1163,6 @@ export function buildThrust(body, color) {
     flames: [[NX, NY, -3.0], [-NX, NY, -3.0]],
   };
 }
+
+// Shared with cars3.js
+export { adder, mats, canvasTex, spokeRim, sidewallRing, profileGeo, shade, plateTex };

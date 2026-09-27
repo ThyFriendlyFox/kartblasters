@@ -24,12 +24,16 @@ export const ENGINES = {
   // Old flathead-style V8: low, rumbly and a little ragged
   flathead: { label: 'Rodded V8', fire: [0, 90, 180, 270, 360, 450, 540, 630], amp: [1, 0.58, 0.9, 0.5, 1, 0.62, 0.86, 0.48], jitter: 9, res: 80, res2: 230, idle: 560, redline: 4800, body: 1.2 },
   bigv8: { label: 'Big-block V8', fire: [0, 90, 180, 270, 360, 450, 540, 630], amp: [1, 0.55, 0.95, 0.5, 1, 0.65, 0.9, 0.45], jitter: 7, res: 85, res2: 240, idle: 600, redline: 4300, body: 1.15 },
+  // Turbo inline-4: thrummy and eager, the turbo softens the pulses
+  turbo4: { label: 'Turbo I4', fire: [0, 180, 360, 540], amp: [1, 0.9, 0.96, 0.88], jitter: 4, res: 175, res2: 520, idle: 900, redline: 6800, body: 0.85 },
+  // Big turbo-diesel straight-6: slow, deep, clattery
+  diesel6: { label: 'Turbo-diesel I6', fire: even(6), amp: [1, 0.86, 0.95, 0.9, 0.97, 0.84], jitter: 10, res: 68, res2: 190, idle: 620, redline: 3400, body: 1.35 },
   // Twin turbofans: a fast, even pulse train reads as a turbine whine, with
   // lots of jitter for the roar
   jet: { label: 'Twin jet', fire: even(24), amp: Array.from({ length: 24 }, (_, i) => 0.85 + 0.15 * Math.sin(i * 1.7)), jitter: 24, res: 620, res2: 1900, idle: 2600, redline: 9800, body: 0.55 },
 };
 
-export const CAR_ENGINES = { hyper: 'v12', muscle: 'v8', formula: 'v10', buggy: 'flat4', truck: 'bigv8', longtail: 'flat12', sixbysix: 'ttv8', shark: 'blown', sixpack: 'blown', dicerod: 'flathead', thrust: 'jet' };
+export const CAR_ENGINES = { hyper: 'turbo4', muscle: 'v8', formula: 'v10', buggy: 'flat4', truck: 'diesel6', longtail: 'flat12', sixbysix: 'ttv8', shark: 'blown', sixpack: 'blown', dicerod: 'flathead', thrust: 'jet' };
 
 const WORKLET = `
 class EngineProcessor extends AudioWorkletProcessor {
