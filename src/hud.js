@@ -159,7 +159,7 @@ export class Hud {
       for (const w of SLOTS) {
         const d = document.createElement('div');
         d.className = 'wslot';
-        d.innerHTML = `<b>${WEAPONS[w].slot}</b><span>${WEAPONS[w].icon}</span><small></small>`;
+        d.innerHTML = `<b>${WEAPONS[w].key || WEAPONS[w].slot}</b><span>${WEAPONS[w].icon}</span><small></small>`;
         d.title = WEAPONS[w].name;
         el.appendChild(d);
       }
@@ -186,6 +186,15 @@ export class Hud {
     g.clearRect(0, 0, S, S);
     g.fillStyle = 'rgba(20,24,32,0.7)';
     g.fillRect(0, 0, S, S);
+    if (world.outline) {
+      g.strokeStyle = 'rgba(200,210,230,0.6)';
+      g.lineWidth = 2;
+      for (const line of world.outline) {
+        g.beginPath();
+        line.forEach(([x, z], i) => (i ? g.lineTo(tx(x), tz(z)) : g.moveTo(tx(x), tz(z))));
+        g.stroke();
+      }
+    }
     g.fillStyle = 'rgba(200,210,230,0.55)';
     for (const b of world.boxes) {
       if (b.dead) continue;
@@ -199,7 +208,7 @@ export class Hud {
     }
     for (const it of items.values()) {
       if (!it.active) continue;
-      g.fillStyle = it.type === 'rocket' ? '#ff4d4d' : it.type === 'health' ? '#4ade80' : '#facc15';
+      g.fillStyle = it.type === 'rocket' ? '#ff4d4d' : it.type === 'health' ? '#4ade80' : it.type === 'akimbo' ? '#ff9f1c' : '#facc15';
       g.fillRect(tx(it.x) - 2, tz(it.z) - 2, 4, 4);
     }
     for (const k of karts.values()) {

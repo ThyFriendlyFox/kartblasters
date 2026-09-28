@@ -230,6 +230,8 @@ export class Sfx {
       case 'zap': this.tone('sawtooth', 1600, 120, 0.2, 0.18 * vol); this.noiseBurst(0.15, 0.2 * vol, 6000, 3); break;
       case 'beam': this.tone('sine', 1200, 1250, 0.1, 0.05 * vol); break;
       case 'sniper': this.noiseBurst(0.6, 0.8 * vol, 5000); this.tone('square', 1800, 90, 0.35, 0.3 * vol); break;
+      case 'needle': this.tone('triangle', 2600, 3400, 0.05, 0.08 * vol); this.tone('sine', 1300, 1700, 0.07, 0.05 * vol); break;
+      case 'supercombine': this.noiseBurst(0.9, 0.8 * vol, 4200); this.tone('sawtooth', 1800, 200, 0.5, 0.25 * vol); this.tone('sine', 140, 40, 0.7, 0.45 * vol); break;
       case 'empty': this.tone('square', 200, 150, 0.05, 0.1 * vol); break;
     }
   }

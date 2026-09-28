@@ -15,6 +15,9 @@ const BURN_DPS = 9;
 const HIT_R = 1.9;
 const RESPAWN_MS = 3000;
 const ITEM_RESPAWN_MS = 15000;
+const AKIMBO_MS = 15000; // how long an akimbo pickup lasts
+const SUPERCOMBINE = 7; // needles stuck in one car to set it off
+const NEEDLE_MS = 3000; // how long a stuck needle stays live
 const SNAP_MS = 50;
 const SENS = 0.0024;
 
@@ -26,6 +29,7 @@ const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const Z = new THREE.Vector3(0, 0, 1);
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 export class Game {
   constructor({ net, name, color, car, botCount, sfx, code, welcome, map = 'stadium', destructible = false, mobile = null, mods = {} }) {
@@ -50,6 +54,12 @@ export class Game {
     this.mapId = welcome?.map || map;
     this.destructible = welcome ? !!welcome.destructible : !!destructible;
     this.world = buildArena(this.scene, { map: this.mapId, destructible: this.destructible });
+    // In the cube you can look (and shoot) right up the walls and at the ceiling
+    [this.pitchMin, this.pitchMax] = this.world.surface ? [-0.9, 1.25] : [-0.35, 0.55];
+    if (this.mapId === 'daytona') {
+      this.camera.far = 1200;
+      this.camera.updateProjectionMatrix();
+    }
     this.digs = []; // crater history, replayed for players who join later
     this.blockHits = new Map();
     this.fx = new Fx(this.scene);
@@ -107,6 +117,23 @@ export class Game {
         g.add(body);
         return g;
       },
+      akimbo: () => {
+        // Two crossed pistols
+        const g = new THREE.Group();
+        const m = new THREE.MeshStandardMaterial({ color: '#ff9f1c', metalness: 0.6, roughness: 0.3, emissive: '#6a3a00' });
+        for (const s of [-1, 1]) {
+          const gun = new THREE.Group();
+          const slide = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 1.5), m);
+          const grip = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.8, 0.35), m);
+          grip.position.set(0, -0.45, -0.5);
+          grip.rotation.x = -0.25;
+          gun.add(slide, grip);
+          gun.rotation.set(0, s * 0.6, s * 0.35);
+          gun.position.x = s * 0.35;
+          g.add(gun);
+        }
+        return g;
+      },
       health: () => {
         const g = new THREE.Group();
         const m = new THREE.MeshBasicMaterial({ color: '#4ade80' });
@@ -141,7 +168,7 @@ export class Game {
       x.textAlign = 'center';
       x.lineWidth = 6;
       x.strokeStyle = 'rgba(0,0,0,0.8)';
-      const label = `[${w.slot}] ${w.name.toUpperCase()}`;
+      const label = `[${w.key || w.slot}] ${w.name.toUpperCase()}`;
       x.strokeText(label, 128, 38);
       x.fillStyle = w.color;
       x.fillText(label, 128, 38);
@@ -153,7 +180,7 @@ export class Game {
       g.add(sp);
       return g;
     };
-    const ringColors = { rocket: '#ff3b3b', health: '#4ade80', boost: '#facc15' };
+    const ringColors = { rocket: '#ff3b3b', health: '#4ade80', boost: '#facc15', akimbo: '#ff9f1c' };
     for (const it of this.world.items) {
       const g = mk[it.type](it);
       if (it.type === 'weapon') ringColors.weapon = WEAPONS[it.w].color;
@@ -299,7 +326,7 @@ export class Game {
     document.addEventListener('mousemove', (e) => {
       if (!this.locked) return;
       this.me.aimYaw -= e.movementX * SENS;
-      this.me.aimPitch = Math.max(-0.35, Math.min(0.55, this.me.aimPitch - e.movementY * SENS));
+      this.me.aimPitch = Math.max(this.pitchMin, Math.min(this.pitchMax, this.me.aimPitch - e.movementY * SENS));
     });
     c.addEventListener('wheel', (e) => {
       if (!this.locked) return;
@@ -327,6 +354,7 @@ export class Game {
         const w = SLOTS.find((k) => WEAPONS[k].slot === slot);
         if (w) this.selectWeapon(w);
       }
+      if (e.code === 'Minus') this.selectWeapon('needler');
       if (e.code === 'KeyM') {
         this.sfx.setMuted(!this.sfx.muted);
         this.hud.toast(this.sfx.muted ? 'Sound off' : 'Sound on');
@@ -489,7 +517,9 @@ export class Game {
     const snap = (k) => [
       k.id, r2(k.pos.x), r2(k.pos.y), r2(k.pos.z), r2(k.vel.x), r2(k.vel.y), r2(k.vel.z),
       r3(k.heading), r3(k.aimYaw), r3(k.aimPitch), Math.round(k.hp), k.alive ? 1 : 0, k.boosting ? 1 : 0,
-      now < k.shieldUntil ? 1 : 0, k.drifting ? 1 : 0,
+      now < k.shieldUntil ? 1 : 0, k.drifting ? 1 : 0, now < (k.akimboUntil || 0) ? 1 : 0,
+      // Curved arenas also need which way is up and where we're pointing
+      ...(this.world.surface && k.up ? [r2(k.up.x), r2(k.up.y), r2(k.up.z), r2(k.fwd3.x), r2(k.fwd3.y), r2(k.fwd3.z)] : []),
     ];
     const e = [snap(this.me)];
     for (const b of this.bots) e.push(snap(b.kart));
@@ -583,7 +613,13 @@ export class Game {
       }
       k.cooldown = w.cooldown * (k.bot ? 1.5 : 1);
     }
-    const origin = k.muzzleWorld(_a).clone();
+    // Akimbo: both guns fire every shot
+    const akimbo = performance.now() < (k.akimboUntil || 0);
+    for (const gun of akimbo ? [k.muzzle, k.muzzle2] : [k.muzzle]) this.fireFrom(k, weapon, k.muzzleWorld(_a, gun).clone());
+  }
+
+  fireFrom(k, weapon, origin) {
+    const w = WEAPONS[weapon];
     const dir = this.aimDir(k, origin);
     if (w.hitscan) {
       this.fireBeam(k, weapon, origin, dir);
@@ -771,6 +807,7 @@ export class Game {
       }
     }
     this.projectiles = this.projectiles.filter((p) => !p.dead);
+    for (const k of this.karts.values()) this.expireNeedles(k, now);
     this.updateEffects(dt);
   }
 
@@ -787,6 +824,7 @@ export class Game {
       this.damageBot(k.id, w.dmg + (w.burn ? w.burn * BURN_DPS * 0.8 : 0), p.owner, p.w, now);
     }
     if (w.chain && this.botAuthority(p.owner)) this.chainZap(p, k);
+    if (w.needle) this.stickNeedle(p, k, now);
     if (w.splash) this.explode(p, p.pos, k.id);
     else if (w.mesh !== 'flame') this.sfx.play('impact', this.volAt(p.pos) * 0.6);
   }
@@ -797,6 +835,8 @@ export class Game {
     if (p) {
       this.killProjectile(p);
       this.fx.impact(pos, p.color);
+      const k = this.karts.get(m.v);
+      if (p.def.needle && k) this.stickNeedle(p, k, performance.now());
     }
     const w = WEAPONS[m.w];
     if (w?.splash) this.explode({ id: m.p, owner: m.o, w: m.w, def: w }, pos, m.v);
@@ -808,6 +848,41 @@ export class Game {
       this.hud.hit(false);
       this.sfx.play('hitmark');
     }
+  }
+
+  /**
+   * Needler: the needle stays stuck in the car for a few seconds. Every
+   * client counts them the same way, so all agree when the seventh sets off
+   * a supercombine (damage is still applied by the victim / bot host).
+   */
+  stickNeedle(p, k, now) {
+    this.expireNeedles(k, now);
+    const n = new THREE.Mesh((this.needleGeo ||= new THREE.OctahedronGeometry(0.12, 0).scale(0.6, 0.6, 4)), (this.needleMat ||= new THREE.MeshBasicMaterial({ color: '#ff7ae3' })));
+    // Stick it where it hit, pointing along its flight, in the car's frame
+    const local = k.root.worldToLocal(p.pos.clone());
+    n.position.copy(local.clampLength(0, 1.6));
+    n.quaternion.setFromUnitVectors(Z, _b.copy(p.vel).normalize());
+    n.userData.t = now;
+    k.root.add(n);
+    (k.needles ||= []).push(n);
+    if (k.needles.length >= SUPERCOMBINE) {
+      for (const x of k.needles) k.root.remove(x);
+      k.needles = [];
+      const pos = k.pos.clone().add(_b.set(0, 1, 0));
+      this.explode({ id: `${p.id}-sc`, owner: p.owner, w: 'needler', def: { color: '#ff4fd8', splash: 7, splashDmg: 70 } }, pos, null);
+      this.sfx.play('supercombine', this.volAt(pos));
+      for (let i = 0; i < 14; i++) this.fx.spark(pos, i % 2 ? '#ff4fd8' : '#ffd0f4');
+      if (p.owner === this.me.id) this.hud.toast('💗 SUPERCOMBINE!');
+    }
+  }
+
+  expireNeedles(k, now) {
+    if (!k.needles?.length) return;
+    k.needles = k.needles.filter((n) => {
+      if (now - n.userData.t < NEEDLE_MS && k.alive) return true;
+      k.root.remove(n);
+      return false;
+    });
   }
 
   /** Splash damage (rockets, grenades). The owner also decides any crater. */
@@ -1198,6 +1273,7 @@ export class Game {
     if (it.type === 'rocket') k.rockets = Math.min(9, k.rockets + 3);
     if (it.type === 'health') k.hp = Math.min(k.maxHp, k.hp + 50);
     if (it.type === 'boost') k.boost = 1;
+    if (it.type === 'akimbo') k.akimboUntil = performance.now() + AKIMBO_MS;
     if (it.type === 'weapon') {
       const w = WEAPONS[it.w];
       k.inv[it.w] = Math.min(w.ammo * MAX_AMMO_MULT, (k.inv[it.w] || 0) + w.ammo);
@@ -1205,7 +1281,7 @@ export class Game {
     }
     if (k === this.me) {
       this.sfx.play('pickup');
-      this.hud.toast(it.type === 'weapon' ? `${WEAPONS[it.w].icon} ${WEAPONS[it.w].name} [${WEAPONS[it.w].slot}]` : { rocket: '+3 Rockets', health: '+50 Health', boost: 'Boost refilled' }[it.type]);
+      this.hud.toast(it.type === 'weapon' ? `${WEAPONS[it.w].icon} ${WEAPONS[it.w].name} [${WEAPONS[it.w].key || WEAPONS[it.w].slot}]` : { rocket: '+3 Rockets', health: '+50 Health', boost: 'Boost refilled', akimbo: `🔫🔫 AKIMBO! Double guns for ${AKIMBO_MS / 1000}s` }[it.type]);
     }
   }
 
@@ -1250,7 +1326,7 @@ export class Game {
         // Drag anywhere to swing the turret
         const [dx, dy] = m.consumeAim();
         me.aimYaw -= dx * 0.0065;
-        me.aimPitch = Math.max(-0.35, Math.min(0.55, me.aimPitch - dy * 0.005));
+        me.aimPitch = Math.max(this.pitchMin, Math.min(this.pitchMax, me.aimPitch - dy * 0.005));
       }
       if (this.locked && (this.mouse.left || m?.fire)) this.tryFire(me, me.weapon, now);
       if (this.locked && (this.mouse.right || m?.rocket || this.keys.has('KeyE') || this.keys.has('KeyQ'))) this.tryFire(me, 'rocket', now);
@@ -1321,13 +1397,20 @@ export class Game {
       k.skid = null;
       return;
     }
-    const f = k.forward(_b);
-    const rx = f.z, rz = -f.x; // right, flat on the ground
-    const right = new THREE.Vector3(rx, 0, rz);
-    const wheels = [-1, 1].map((side) => {
-      const x = k.pos.x - f.x * 1.35 + rx * side * 1.05, z = k.pos.z - f.z * 1.35 + rz * side * 1.05;
-      return new THREE.Vector3(x, this.world.groundAt(x, z) + 0.05, z);
-    });
+    let wheels, right;
+    if (this.world.surface && k.up) {
+      // On the cube's walls and ceiling: lay the marks along the surface
+      right = new THREE.Vector3().crossVectors(k.fwd3, k.up);
+      wheels = [-1, 1].map((side) => k.pos.clone().addScaledVector(k.fwd3, -1.35).addScaledVector(right, side * 1.05).addScaledVector(k.up, 0.05));
+    } else {
+      const f = k.forward(_b);
+      const rx = f.z, rz = -f.x; // right, flat on the ground
+      right = new THREE.Vector3(rx, 0, rz);
+      wheels = [-1, 1].map((side) => {
+        const x = k.pos.x - f.x * 1.35 + rx * side * 1.05, z = k.pos.z - f.z * 1.35 + rz * side * 1.05;
+        return new THREE.Vector3(x, this.world.groundAt(x, z) + 0.05, z);
+      });
+    }
     if (k.skid) for (let w = 0; w < 2; w++) this.skids.add(k.skid[w], wheels[w], right);
     k.skid = wheels;
     for (const w of wheels) if (Math.random() < 0.6) this.fx.puff(w, '#e2e2e2', 0.55);
@@ -1364,7 +1447,7 @@ export class Game {
     const cp = Math.cos(pitch);
     _dir.set(Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp);
     const zoom = this.mods.size < 1 ? 0.8 : 1 + (this.mods.size - 1) * 0.55; // giant cars: pull back
-    const base = _a.set(me.pos.x, me.pos.y + 2.8 * zoom, me.pos.z);
+    const base = _a.copy(me.pos).addScaledVector(this.world.surface && me.up ? me.up : WORLD_UP, 2.8 * zoom);
     let dist = (me.alive ? 8.5 : 14) * zoom;
     // Pull the camera in if an obstacle is between it and the kart
     for (let d = 1; d <= dist; d += 0.5) {

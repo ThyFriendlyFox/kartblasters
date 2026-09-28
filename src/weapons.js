@@ -10,17 +10,23 @@ import * as THREE from 'three';
  * burn (seconds on fire), chain (extra targets), hitscan + range, radius (hit size).
  */
 export const WEAPONS = {
-  blaster: { slot: 1, name: 'Blaster', icon: '⚡', color: null, speed: 115, dmg: 9, life: 1.1, cooldown: 0.11, heat: 0.075, mesh: 'bolt', sfx: 'blaster' },
-  shotgun: { slot: 2, name: 'Blunderbuss', icon: '💥', color: '#ffd166', speed: 95, dmg: 7, life: 0.42, cooldown: 0.8, ammo: 12, pellets: 8, spread: 0.1, mesh: 'pellet', sfx: 'shotgun' },
-  minigun: { slot: 3, name: 'Laser Minigun', icon: '🔴', color: '#ff3b3b', speed: 150, dmg: 4, life: 0.8, cooldown: 0.05, ammo: 160, spread: 0.055, mesh: 'laser', sfx: 'laser' },
+  // Speeds are spread out so every gun feels different: from the drifting
+  // bubbles and seeking needles up to the near-instant Holy Grail. Lives are
+  // set so each keeps its old range.
+  blaster: { slot: 1, name: 'Blaster', icon: '⚡', color: null, speed: 105, dmg: 9, life: 1.2, cooldown: 0.11, heat: 0.075, mesh: 'bolt', sfx: 'blaster' },
+  shotgun: { slot: 2, name: 'Blunderbuss', icon: '💥', color: '#ffd166', speed: 170, dmg: 7, life: 0.24, cooldown: 0.8, ammo: 12, pellets: 8, spread: 0.1, mesh: 'pellet', sfx: 'shotgun' },
+  minigun: { slot: 3, name: 'Laser Minigun', icon: '🔴', color: '#ff3b3b', speed: 240, dmg: 4, life: 0.5, cooldown: 0.05, ammo: 160, spread: 0.055, mesh: 'laser', sfx: 'laser' },
   hail: { slot: 4, name: 'Hail Storm', icon: '🧊', color: '#bfefff', speed: 62, dmg: 15, life: 3, cooldown: 0.22, ammo: 30, gravity: 30, lob: 0.12, bounces: 3, radius: 0.35, mesh: 'ball', sfx: 'hail' },
-  bubble: { slot: 5, name: 'Bubble Blaster', icon: '🫧', color: '#6ad7ff', speed: 36, dmg: 13, life: 4, cooldown: 0.3, ammo: 25, homing: 2.4, radius: 0.5, mesh: 'bubble', sfx: 'bubble' },
+  bubble: { slot: 5, name: 'Bubble Blaster', icon: '🫧', color: '#6ad7ff', speed: 26, dmg: 13, life: 5.5, cooldown: 0.3, ammo: 25, homing: 2.4, radius: 0.5, mesh: 'bubble', sfx: 'bubble' },
   grenade: { slot: 6, name: 'Grenade Launcher', icon: '🟢', color: '#7dff5a', speed: 50, dmg: 0, life: 6, cooldown: 0.7, ammo: 10, gravity: 32, lob: 0.18, sticky: true, fuse: 1, splash: 6.5, splashDmg: 42, dig: 3.5, mesh: 'grenade', sfx: 'grenade' },
   flame: { slot: 7, name: 'Flamethrower', icon: '🔥', color: '#ff7b1c', speed: 40, dmg: 3, life: 0.45, cooldown: 0.05, ammo: 220, spread: 0.09, gravity: -8, burn: 2, radius: 0.9, mesh: 'flame', sfx: 'flame' },
-  electro: { slot: 8, name: 'Electro Bolt', icon: '🌩️', color: '#b28dff', speed: 130, dmg: 22, life: 1.2, cooldown: 0.55, ammo: 16, chain: 3, chainRange: 26, chainDmg: 14, radius: 0.2, mesh: 'orb', sfx: 'zap' },
+  electro: { slot: 8, name: 'Electro Bolt', icon: '🌩️', color: '#b28dff', speed: 75, dmg: 22, life: 2.1, cooldown: 0.55, ammo: 16, chain: 3, chainRange: 26, chainDmg: 14, radius: 0.2, mesh: 'orb', sfx: 'zap' },
   beam: { slot: 9, name: 'Focus Beam', icon: '🟩', color: '#39ff14', dmg: 4.5, cooldown: 0.1, ammo: 110, hitscan: true, range: 75, sfx: 'beam' },
-  sniper: { slot: 0, name: 'Holy Grail', icon: '☀️', color: '#ffe066', speed: 420, dmg: 85, life: 0.6, cooldown: 1.6, ammo: 6, mesh: 'tracer', sfx: 'sniper' },
-  rocket: { slot: null, name: 'Rocket', icon: '🚀', color: '#ffb703', speed: 64, dmg: 45, life: 2.5, cooldown: 0.9, splash: 7.5, splashDmg: 38, dig: 5, mesh: 'rocket', sfx: 'rocket' },
+  sniper: { slot: 0, name: 'Holy Grail', icon: '☀️', color: '#ffe066', speed: 640, dmg: 85, life: 0.4, cooldown: 1.6, ammo: 6, mesh: 'tracer', sfx: 'sniper' },
+  // Needler (key -): pink crystal needles that home in and stick. Seven stuck
+  // in one car within a few seconds set off a supercombine explosion.
+  needler: { slot: 11, key: '-', name: 'Needler', icon: '💗', color: '#ff4fd8', speed: 58, dmg: 4, life: 2.6, cooldown: 0.09, ammo: 70, spread: 0.03, homing: 3.4, radius: 0.1, needle: true, mesh: 'needle', sfx: 'needle' },
+  rocket: { slot: null, name: 'Rocket', icon: '🚀', color: '#ffb703', speed: 52, dmg: 45, life: 3.1, cooldown: 0.9, splash: 7.5, splashDmg: 38, dig: 5, mesh: 'rocket', sfx: 'rocket' },
 };
 
 /** Weapons in key order: 1..9 then 0. */
@@ -78,6 +84,10 @@ export function projectileMesh(w, key, ownerColor) {
       g.add(new THREE.Mesh((geo.orb ||= new THREE.OctahedronGeometry(0.45, 0)), mat('orb', () => glow('#ffffff', 1))));
       g.add(new THREE.Mesh((geo.orbHalo ||= new THREE.SphereGeometry(0.9, 10, 8)), mat('orbHalo', () => glow(c, 0.45))));
       break;
+    case 'needle':
+      g.add(new THREE.Mesh((geo.needle ||= new THREE.OctahedronGeometry(0.2, 0).scale(0.7, 0.7, 3.2)), mat('needle', () => new THREE.MeshBasicMaterial({ color: '#ffd0f4' }))));
+      g.add(new THREE.Mesh((geo.needleGlow ||= new THREE.OctahedronGeometry(0.34, 0).scale(1, 1, 2.8)), mat('needleGlow', () => glow(c, 0.6))));
+      break;
     case 'tracer':
       g.add(new THREE.Mesh((geo.tracer ||= new THREE.CylinderGeometry(0.09, 0.09, 9, 6).rotateX(Math.PI / 2)), mat('tracer', () => glow(c, 1))));
       break;
@@ -96,7 +106,7 @@ export function projectileMesh(w, key, ownerColor) {
 
 /** Weapons a bot would like to use at a given distance, best first. */
 export function botPreference(dist) {
-  if (dist < 14) return ['flame', 'shotgun', 'grenade', 'minigun', 'electro', 'hail', 'beam', 'bubble', 'sniper'];
-  if (dist < 35) return ['electro', 'minigun', 'beam', 'hail', 'bubble', 'grenade', 'shotgun', 'sniper', 'flame'];
-  return ['sniper', 'beam', 'electro', 'minigun', 'bubble', 'hail'];
+  if (dist < 14) return ['flame', 'shotgun', 'grenade', 'needler', 'minigun', 'electro', 'hail', 'beam', 'bubble', 'sniper'];
+  if (dist < 35) return ['needler', 'electro', 'minigun', 'beam', 'hail', 'bubble', 'grenade', 'shotgun', 'sniper', 'flame'];
+  return ['sniper', 'beam', 'electro', 'minigun', 'needler', 'bubble', 'hail'];
 }

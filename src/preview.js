@@ -87,9 +87,10 @@ function trackShot(id) {
 
 function arenaShot(id) {
   const scene = new THREE.Scene();
-  buildArena(scene, { map: id, destructible: false });
-  const url = render(scene, new THREE.Vector3(0, 0, 0), HALF * 1.15, new THREE.Vector3(0.5, 1.0, 0.8));
-  return { url, facts: [`${HALF * 2} m arena`], desc: null };
+  const world = buildArena(scene, { map: id, destructible: false });
+  const half = world.half || HALF;
+  const url = render(scene, new THREE.Vector3(0, world.surface ? 10 : 0, 0), half * 1.15, new THREE.Vector3(0.5, 1.0, 0.8));
+  return { url, facts: [`${Math.round(half * 2)} m arena`], desc: null };
 }
 
 /** Promise of { url, facts, desc } for a map. */

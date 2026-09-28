@@ -50,6 +50,8 @@ const MAPS = {
   battle: [
     ['stadium', 'Stadium — arena with cover, jump pads and pickups'],
     ['craters', 'Crater Field — rolling hills and block forts'],
+    ['daytona', 'Daytona Speedway — 31° banked tri-oval with an infield to fight in'],
+    ['cube', 'Rocket Cube — rounded arena: drive up the walls and over the ceiling'],
   ],
 };
 

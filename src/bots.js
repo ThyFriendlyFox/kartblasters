@@ -45,6 +45,7 @@ export class BotBrain {
   }
 
   randomPoint() {
+    if (this.world.randomPoint) return this.world.randomPoint();
     const h = this.world.half - 12;
     for (;;) {
       const x = (Math.random() * 2 - 1) * h, z = (Math.random() * 2 - 1) * h;

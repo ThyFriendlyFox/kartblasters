@@ -74,10 +74,12 @@ The menu shows an aerial preview of the selected map with its lap length and a r
 | Gyrosphere | Race (epic, ~1:30 lap) | A cartoon stadium course on the inside of a giant sphere: no straights, the road winds across the floor, up the walls and upside-down over the ceiling, criss-crossing itself (over/unders plus open through-junctions with no walls). All three kinds of loop: vertical loops, corkscrews and banked helix spirals, plus jumps, rolling hills and bumpy roller sections. Three CHORD routes fork off the wall and cut through the middle of the sphere to another part of the course: LOOP CHORD (a loop in mid-air), TWIST CHORD (a double corkscrew) and SKY CHORD |
 | Stadium | Battle | Walled arena with cover, jump pads, rocket/health/boost pickups |
 | Crater Field | Battle | Rolling hills with brick forts and stone pillars |
+| Daytona Speedway | Battle | A scaled-down superspeedway: 31° banked turns, an 18° tri-oval dogleg and a 3° back straight inside a SAFER wall and catch fence, with grandstands, and an infield (pit road, garages, Lake Lloyd, barriers) to fight in |
+| Rocket Cube | Battle | Rocket League style arena with rounded edges: drive up the walls and over the ceiling. Your tyres grip harder the faster you go, so walls are easy, but only a boosting car can stay on the ceiling; slow down and gravity pulls you off |
 
 ### Weapons (battle)
 
-Inspired by the Raze flash games. Everyone starts with the Blaster; the rest come from weapon crates around both battle maps (each crate is labeled with its key). Picking up a weapon you already have tops up its ammo. You go back to the Blaster when you die.
+Inspired by the Raze flash games. Everyone starts with the Blaster; the rest come from weapon crates around every battle map (each crate is labeled with its key). Picking up a weapon you already have tops up its ammo. You go back to the Blaster when you die.
 
 | Key | Weapon | What it does |
 | --- | --- | --- |
@@ -91,6 +93,11 @@ Inspired by the Raze flash games. Everyone starts with the Blaster; the rest com
 | 8 | Electro Bolt | On hit, arcs to up to 3 more enemies nearby, even through walls |
 | 9 | Focus Beam | Continuous beam that never misses, low damage per tick |
 | 0 | Holy Grail | Sniper: a near-instant 85-damage shot, slow reload |
+| - | Needler | Rapid pink needles that home in and stick. Get 7 stuck in one car within 3 seconds and they set off a supercombine explosion (70 damage) |
+
+Every weapon's projectiles fly at their own speed, from drifting bubbles (26) and seeking needles (58) up through the Blaster (105), shotgun pellets (170) and minigun lasers (240) to the Holy Grail (640); the ranges are the same as before.
+
+**Akimbo** 🔫🔫: the orange crossed-pistols pickup gives you a second gun for 15 seconds. Both fire on every shot (ammo is used once per shot).
 
 Rockets stay on right click / E / Q, with ammo from the red pickups. AI cars grab weapon crates too and pick the best weapon for the range they're fighting at.
 

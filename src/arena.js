@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Terrain, seeded } from './terrain.js';
+import { buildDaytona, buildCube } from './arenas2.js';
 
 export const HALF = 90; // arena half-size (inner edge of perimeter walls)
 
@@ -70,6 +71,8 @@ function crateTexture() {
  * All boxes are axis-aligned so collision stays cheap.
  */
 export function buildArena(scene, { map = 'stadium', destructible = false } = {}) {
+  if (map === 'daytona') return buildDaytona(scene, { destructible });
+  if (map === 'cube') return buildCube(scene, { destructible });
   const craters = map === 'craters';
   const world = {
     half: HALF, boxes: [], cyls: [], pads: [], spawns: [], items: [],
@@ -335,10 +338,11 @@ export function buildArena(scene, { map = 'stadium', destructible = false } = {}
   // Weapon crates (keys 2-0)
   for (const [w, x, z] of [
     ['hail', 30, 30], ['bubble', -30, -30], ['grenade', 30, -30], ['electro', -30, 30], ['sniper', 0, 82],
-    ['beam', 0, -82], ['minigun', 82, -30], ['shotgun', -82, 30], ['flame', 0, 12],
+    ['beam', 0, -82], ['minigun', 82, -30], ['shotgun', -82, 30], ['flame', 0, 12], ['needler', 0, -12],
   ]) {
     world.items.push({ id: id++, type: 'weapon', w, x, z });
   }
+  for (const [x, z] of [[60, 60], [-60, -60]]) world.items.push({ id: id++, type: 'akimbo', x, z });
 
   // Instanced blocks
   const unit = new THREE.BoxGeometry(1, 1, 1);
@@ -400,6 +404,7 @@ export function buildArena(scene, { map = 'stadium', destructible = false } = {}
 export function pointBlocked(world, x, y, z, pad = 0) {
   if (y < world.groundAt(x, z)) return true;
   if (Math.abs(x) > world.half + 2 || Math.abs(z) > world.half + 2) return true;
+  if (world.blocked?.(x, y, z)) return true;
   for (const b of world.boxes) {
     if (b.dead || y < b.y0) continue;
     if (y < b.h && x > b.minX - pad && x < b.maxX + pad && z > b.minZ - pad && z < b.maxZ + pad) return true;
@@ -452,6 +457,11 @@ export function collideWorld(world, pos, vel, r) {
     if (d2 >= rr * rr) continue;
     const d = Math.sqrt(d2) || 0.001;
     resolve(dx / d, dz / d, rr - d);
+  }
+  // Arenas that aren't square keep karts in themselves
+  if (world.bound) {
+    world.bound(pos, vel, r, resolve);
+    return impact;
   }
   // Hard clamp in case something tunnels
   const lim = world.half - r;
