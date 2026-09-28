@@ -295,6 +295,9 @@ export function solveCircuit(build, back = 70) {
   return t.close();
 }
 
+/** Road paints for Lagoon Bay (the theme colours its rails and lights by these). */
+export const LAGOON = { SAND: '#e9d09a', DIRT: '#c98f55', ROCK: '#b9bcc2', TECH: '#34373f', LOOP: '#d8232f' };
+
 // Leg lengths chosen so each circuit closes back on its start line
 const LEG = { twin2: 60, twin3: 176, twin4: 186, junc2: 60, junc3: 118, junc4: 170 };
 
@@ -665,6 +668,42 @@ export const TRACKS = {
         },
       },
     ],
+  },
+  lagoon: {
+    name: 'Lagoon Bay',
+    desc: 'Beach sand, a twisting half-pipe over the sea and a giant red loop',
+    theme: 'lagoon',
+    width: 16,
+    flat: true,
+    pillars: 'truss',
+    build() {
+      // Remake of a tropical stunt lap: beach run, jump over a red tower,
+      // a bridge between karst rocks, a snaking half-pipe with a giant loop,
+      // back over a jungle bridge and down onto the beach
+      const { SAND, DIRT, ROCK, TECH, LOOP } = LAGOON;
+      return solveCircuit((a, b) => {
+        const t = new TrackTurtle(0, 2, 0, 0, this.width).paint(SAND);
+        t.straight(40).boost(14).straight(a);
+        t.turn(25, 140).turn(-25, 140).mark('beach');
+        t.straight(30).straight(40, 6);
+        t.paint(DIRT).ramp(16, 2).gap(46, -2).mark('tower').straight(20);
+        t.paint(ROCK).straight(80, 14).mark('bridge');
+        // The half-pipe: banks hard one way, snakes back and forth, loops
+        t.paint(TECH).wallride(-90, 55, 78, 6);
+        t.straight(30).wallride(100, 42, 78).wallride(-100, 42, 78);
+        t.straight(120).boost(14).straight(20).paint(LOOP).loop(34, 1).paint(TECH).straight(90);
+        t.wallride(-90, 50, 80, -4);
+        t.straight(90).wallride(-70, 45, 76).wallride(70, 45, 76);
+        t.straight(40).corkscrew(100, 1, -1).straight(110);
+        t.wallride(95, 48, 78).wallride(-95, 48, 78).straight(120);
+        // Jungle bridge, then down to the sea
+        t.paint(ROCK).turn(-90, 60).mark('crane');
+        t.straight(b).straight(130, -22);
+        t.paint(SAND).straight(40).mark('shore').paint(DIRT).ramp(14, 2).gap(40, -2).paint(SAND);
+        t.straight(60).turn(-90, 60);
+        return t;
+      });
+    },
   },
   gyro: {
     name: 'Gyrosphere',

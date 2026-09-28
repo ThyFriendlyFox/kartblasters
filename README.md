@@ -66,6 +66,7 @@ The menu shows an aerial preview of the selected map with its lap length and a r
 | Volcano Spiral | Race | Double helix climbing round a volcano, steep drop into a mega loop |
 | Twin Peaks | Race | Two routes (low road or the High Road jump) plus a key-locked corkscrew shortcut |
 | Neon Junction | Race | Split-level sky highway (upper waves or Lower Deck) plus a key-locked Express lane |
+| Lagoon Bay | Race (~40 s lap) | Tropical stunt lap inspired by a Trackmania Turbo lagoon track: a sandy beach run, a jump over a red tower, a concrete bridge between karst rocks, then a dark half-pipe over the sea (red rails, cyan lights) that snakes through wall rides, a giant red loop and a corkscrew, before a jungle bridge past a crane drops you back onto the beach for a final jump |
 | Summit Rush | Race (epic, ~2 min lap) | Switchbacks up a snowy mountain, a leap off the summit and a plunge down the far side, plus loops, a corkscrew and a spiral flyover |
 | Canyon Colossus | Race (epic, ~2 min lap) | Stacked stunt park on lattice pillars: roads cross over and under each other, three wall rides, a spiral climb to a high line, two corkscrews, loops and a long plunge |
 | Skyline Spiral | Race (epic, ~2 min lap) | Neon stunt stack: climbing wall ride, loop, rooftop gaps, a corkscrew, two turns up a skyscraper, a dive onto a banked wall-ride descent, double loop and a wall-ride chicane |

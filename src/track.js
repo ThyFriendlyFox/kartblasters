@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { buildMountain } from './mountain.js';
 import { buildStadium, toon } from './stadium.js';
-import { TRACKS, TrackTurtle } from './trackdefs.js';
+import { TRACKS, TrackTurtle, LAGOON } from './trackdefs.js';
 
 const DS = 1; // physics sample spacing along the track (world units)
 
@@ -381,11 +381,12 @@ export class Path {
 
     const P = new THREE.Vector3(), N = new THREE.Vector3(), R = new THREE.Vector3();
     const col = new THREE.Color();
-    const build = (list, uvScale, useColor, isRail = false, isRoad = false) => {
+    const build = (list, uvScale, useColor, isRail = false, isRoad = false, rowOk = null, mapCol = null) => {
       const pos = [], uv = [], colors = [];
       for (let r = 0; r < rows.length - 1; r++) {
         const i0 = rows[r], i1 = rows[r + 1];
         if (this.gap[i0] || this.gap[i1]) continue;
+        if (rowOk && !(rowOk(i0) && rowOk(i1))) continue;
         for (let li = 0; li < list.length; li++) {
           if (!list[li]) continue;
           const [a, b] = list[li];
@@ -407,7 +408,7 @@ export class Path {
             pos.push(q[0], q[1], q[2]);
             uv.push(q[3], q[4]);
             if (useColor) {
-              col.set(this.color[q[5]]);
+              col.set(mapCol ? mapCol(this.color[q[5]]) : this.color[q[5]]);
               colors.push(col.r, col.g, col.b);
             }
           }
@@ -423,8 +424,9 @@ export class Path {
 
     const neon = theme === 'neon';
     const stadium = theme === 'stadium';
+    const lagoon = theme === 'lagoon';
     const surface = {
-      map: roadTexture(neon),
+      map: lagoon ? grainTexture() : roadTexture(neon),
       vertexColors: true,
       side: THREE.DoubleSide,
       // Where a branch road still overlaps the main road at a fork or join,
@@ -436,13 +438,13 @@ export class Path {
     };
     const roadMat = stadium
       ? toon('#ffffff', surface) // cartoon look: flat toon bands
-      : new THREE.MeshStandardMaterial({ ...surface, roughness: neon ? 0.35 : 0.45, metalness: neon ? 0.3 : 0.05, emissive: neon ? '#0a1440' : '#000000' });
+      : new THREE.MeshStandardMaterial({ ...surface, roughness: neon ? 0.35 : lagoon ? 0.85 : 0.45, metalness: neon ? 0.3 : 0.05, emissive: neon ? '#0a1440' : '#000000' });
     const railMat = stadium
       ? toon('#ffffff', { side: THREE.DoubleSide })
       : neon
         ? new THREE.MeshStandardMaterial({ color: '#ffe600', emissive: '#b8a000', emissiveIntensity: 0.8, side: THREE.DoubleSide })
         : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, side: THREE.DoubleSide });
-    const underMat = stadium ? toon('#5b6b8c', { side: THREE.DoubleSide }) : new THREE.MeshStandardMaterial({ color: neon ? '#101428' : '#c55e00', side: THREE.DoubleSide });
+    const underMat = stadium ? toon('#5b6b8c', { side: THREE.DoubleSide }) : new THREE.MeshStandardMaterial({ color: neon ? '#101428' : lagoon ? '#3a3d45' : '#c55e00', side: THREE.DoubleSide });
 
     if (stadium) {
       // Bright strips: blue lines along the road edges, and a strip on top
@@ -468,9 +470,18 @@ export class Path {
       glow(tops, (i) => (this.color[i] === '#e8e3d8' ? '#ff8a1e' : this.color[i]), true);
     }
 
+    // Lagoon: red rails and cyan edge lights on the half-pipe, white on the
+    // bridges, blue barriers along the beach
+    const tech = (i) => this.color[i] === LAGOON.TECH || this.color[i] === LAGOON.LOOP;
+    const lagoonRail = (c) => (c === LAGOON.TECH || c === LAGOON.LOOP ? '#c61f2b' : c === LAGOON.ROCK ? '#eef0f3' : '#2f86d8');
+    if (lagoon) {
+      const edge = [[[-hw + 0.3, 0.06], [-hw + 0.8, 0.06]], null, null, [[hw - 0.8, 0.06], [hw - 0.3, 0.06]], null, null];
+      scene.add(new THREE.Mesh(build(edge, 16, false, true, false, tech), new THREE.MeshBasicMaterial({ color: '#2fe6ff', side: THREE.DoubleSide })));
+    }
+
     const roadMesh = new THREE.Mesh(build(strips.road, 16, true, false, true), roadMat);
     roadMesh.receiveShadow = true;
-    const railMesh = new THREE.Mesh(build(strips.rail, 16, !neon && !stadium, true), railMat);
+    const railMesh = new THREE.Mesh(build(strips.rail, 16, !neon && !stadium, true, false, null, lagoon ? lagoonRail : null), railMat);
     railMesh.castShadow = !stadium;
     const underMesh = new THREE.Mesh(build(strips.under, 16, false, false, true), underMat);
     underMesh.castShadow = !stadium;
@@ -1077,6 +1088,21 @@ function roadTexture(neon) {
   });
 }
 
+/** Fine grain that reads as sand, dirt, concrete or dark tech tiles once tinted. */
+function grainTexture() {
+  return canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 4000; i++) {
+      const v = 200 + Math.random() * 55;
+      g.fillStyle = `rgb(${v},${v},${v})`;
+      g.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+    }
+    g.fillStyle = 'rgba(0,0,0,0.07)';
+    for (let i = 0; i < 8; i++) g.fillRect(0, i * 32, w, 2);
+  });
+}
+
 function chevronTexture() {
   return canvasTex(128, 128, (g, w, h) => {
     g.clearRect(0, 0, w, h);
@@ -1299,6 +1325,10 @@ const DAY_THEMES = {
     sky: '#ffc58f', fog: ['#ffd9b0', 320, 1200], hemi: ['#fff1dc', '#b07a45', 1.5], sun: ['#ffd8a8', 2.6],
     ground: ['#e3b778', '#d6a865', '#edc88e'], hills: ['#c2623a', '#a94f2e'], clouds: 6,
   },
+  lagoon: {
+    sky: '#6cc4f2', fog: ['#c4eaf8', 420, 1700], hemi: ['#f2fbff', '#3d8a6a', 1.6], sun: ['#fff6e0', 2.5],
+    ground: ['#23b3c4', '#20a9ba', '#2bbccc'], hills: ['#9a9486', '#8d8779'], clouds: 20,
+  },
   volcano: {
     sky: '#2a0f14', fog: ['#4a1a12', 220, 950], hemi: ['#ff9a6a', '#2a1010', 1.3], sun: ['#ffb07a', 1.9],
     ground: ['#2b2224', '#221a1c', '#352a2b'], hills: ['#241a1b', '#301f1d'], clouds: 0,
@@ -1337,7 +1367,10 @@ function buildDaylight(scene, theme, track) {
     }
   });
   groundTex.repeat.set(120, 120);
-  const groundMat = new THREE.MeshLambertMaterial({ map: groundTex });
+  // (Lagoon: the ground is the sea; the islands sit on top of it)
+  const groundMat = theme === 'lagoon'
+    ? new THREE.MeshStandardMaterial({ map: groundTex, roughness: 0.15, metalness: 0.2 })
+    : new THREE.MeshLambertMaterial({ map: groundTex });
   if (theme === 'volcano') {
     // Glowing lava cracks
     const cracks = canvasTex(512, 512, (g, w, h) => {
@@ -1366,13 +1399,13 @@ function buildDaylight(scene, theme, track) {
   const groundSize = Math.max(3000, ext * 2 + 1800);
   groundTex.repeat.set((120 * groundSize) / 3000, (120 * groundSize) / 3000);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(groundSize, groundSize), groundMat);
-  ground.position.set(c.x, 0, c.z);
+  ground.position.set(c.x, theme === 'lagoon' ? -0.6 : 0, c.z);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);
 
   // Distant hills / mesas / volcanic peaks
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < (theme === 'lagoon' ? 0 : 26); i++) {
     const a = (i / 26) * Math.PI * 2;
     const r = Math.max(720, ext + 420) + Math.random() * 220;
     const h = (120 + Math.random() * 180) * (theme === 'alpine' ? 1.3 : 1) * Math.max(1, Math.sqrt(ext / 500));
@@ -1455,6 +1488,8 @@ function buildDaylight(scene, theme, track) {
         scene.add(m);
       }
     });
+  } else if (theme === 'lagoon') {
+    buildLagoon(scene, track, c, ext);
   } else if (theme === 'volcano') {
     const rock = new THREE.MeshLambertMaterial({ color: '#2d2224' });
     const glow = new THREE.MeshBasicMaterial({ color: '#ff5a1f' });
@@ -1505,6 +1540,176 @@ function buildDaylight(scene, theme, track) {
     g.userData.cloud = true;
     scene.add(g);
   }
+}
+
+/**
+ * Tropical lagoon: sandy shores under the low road with jungle behind them,
+ * palms, towering karst rocks out in the turquoise sea, the red tower the
+ * first jump clears, a crane by the jungle bridge and an advertising blimp.
+ */
+function buildLagoon(scene, track, c, ext) {
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler();
+  const inst = (geo, mat, n, shadow = true) => {
+    const im = new THREE.InstancedMesh(geo, mat, Math.max(1, n));
+    im.count = n;
+    im.castShadow = shadow;
+    im.receiveShadow = true;
+    scene.add(im);
+    return im;
+  };
+  const n = track.n, hw = track.hw;
+  const P = (i) => p.set(track.P[i * 3], track.P[i * 3 + 1], track.P[i * 3 + 2]);
+  const clearOf = (x, z, d) => {
+    for (let i = 0; i < n; i += 2) {
+      const dx = track.P[i * 3] - x, dz = track.P[i * 3 + 2] - z;
+      if (dx * dx + dz * dz < d * d) return false;
+    }
+    return true;
+  };
+
+  // Shores: sand under the low road, jungle on the landward side (the
+  // inside of the lap), so the sea always opens up on the outside
+  const sand = [], grass = [], palms = [];
+  for (let i = 0; i < n; i += 6) {
+    const y = track.P[i * 3 + 1];
+    if (y > 9 || track.gap[i]) continue;
+    const x = track.P[i * 3], z = track.P[i * 3 + 2];
+    sand.push([x, z, hw + 22 + Math.random() * 8]);
+    const dx = c.x - x, dz = c.z - z, dl = Math.hypot(dx, dz) || 1;
+    const gx = x + (dx / dl) * (hw + 48), gz = z + (dz / dl) * (hw + 48);
+    grass.push([gx, gz, 34 + Math.random() * 10]);
+    for (let k = 0; k < 3; k++) {
+      const a = Math.random() * Math.PI * 2, rr = Math.random() * 40;
+      const px = gx + Math.cos(a) * rr, pz = gz + Math.sin(a) * rr;
+      if (clearOf(px, pz, hw + 7)) palms.push([px, pz]);
+    }
+    // A few palms leaning out over the sand on the seaward side too
+    if (Math.random() < 0.3) {
+      const px = x - (dx / dl) * (hw + 10 + Math.random() * 10), pz = z - (dz / dl) * (hw + 10 + Math.random() * 10);
+      if (clearOf(px, pz, hw + 6)) palms.push([px, pz]);
+    }
+  }
+  const disc = new THREE.CylinderGeometry(1, 1.15, 1, 20);
+  const sandIm = inst(disc, new THREE.MeshLambertMaterial({ color: '#f1dcaa' }), sand.length, false);
+  sand.forEach(([x, z, r], i) => sandIm.setMatrixAt(i, m.compose(p.set(x, -0.45, z), q.identity(), sc.set(r, 1, r))));
+  const shallow = inst(disc, new THREE.MeshBasicMaterial({ color: '#7fe3e0', transparent: true, opacity: 0.55, depthWrite: false }), sand.length, false);
+  sand.forEach(([x, z, r], i) => shallow.setMatrixAt(i, m.compose(p.set(x, -0.9, z), q, sc.set(r + 14, 1, r + 14))));
+  const grassIm = inst(disc, new THREE.MeshLambertMaterial({ color: '#4f9a3c' }), grass.length, false);
+  grass.forEach(([x, z, r], i) => grassIm.setMatrixAt(i, m.compose(p.set(x, -0.35, z), q, sc.set(r, 1, r))));
+
+  // Palms: a leaning trunk and a crown of drooping fronds
+  const trunk = inst(new THREE.CylinderGeometry(0.35, 0.6, 1, 7).translate(0, 0.5, 0), new THREE.MeshLambertMaterial({ color: '#8a6a45' }), palms.length);
+  const FR = 7;
+  const frondGeo = new THREE.ConeGeometry(1, 1, 4, 1).rotateX(Math.PI / 2).translate(0, 0, 0.5);
+  const fronds = inst(frondGeo, new THREE.MeshLambertMaterial({ color: '#2f8a3a' }), palms.length * FR);
+  const up = new THREE.Vector3(0, 1, 0);
+  palms.forEach(([x, z], i) => {
+    const h = 9 + Math.random() * 7, lean = 0.1 + Math.random() * 0.25, dir = Math.random() * Math.PI * 2;
+    e.set(Math.cos(dir) * lean, 0, Math.sin(dir) * lean);
+    q.setFromEuler(e);
+    trunk.setMatrixAt(i, m.compose(p.set(x, 0, z), q, sc.set(1, h, 1)));
+    const top = up.clone().applyQuaternion(q).multiplyScalar(h).add(new THREE.Vector3(x, 0, z));
+    for (let k = 0; k < FR; k++) {
+      e.set(0.35 + Math.random() * 0.25, (k / FR) * Math.PI * 2 + Math.random() * 0.4, 0, 'YXZ');
+      fronds.setMatrixAt(i * FR + k, m.compose(top, q.setFromEuler(e), sc.set(1.3, 0.25, 6 + Math.random() * 2)));
+    }
+  });
+  q.identity();
+
+  // Karst towers: bulging limestone columns with jungle on top
+  const prof = [];
+  for (let k = 0; k <= 10; k++) {
+    const t = k / 10;
+    prof.push(new THREE.Vector2(0.62 + 0.3 * Math.sin(t * Math.PI * 0.9 + 0.3) - 0.35 * t * t, t));
+  }
+  prof.push(new THREE.Vector2(0.001, 1));
+  const karstGeo = new THREE.LatheGeometry(prof, 14);
+  const pos = karstGeo.attributes.position;
+  for (let k = 0; k < pos.count; k++) {
+    const j = 0.88 + Math.sin(pos.getY(k) * 23 + pos.getX(k) * 9) * 0.07 + Math.random() * 0.06;
+    pos.setX(k, pos.getX(k) * j);
+    pos.setZ(k, pos.getZ(k) * j);
+  }
+  karstGeo.computeVertexNormals();
+  const capGeo = new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+  const rocks = [];
+  for (let k = 0; k < 40; k++) {
+    // Out in the sea around the course, a few big ones on the horizon
+    const a = Math.random() * Math.PI * 2, far = k < 12;
+    const r = far ? ext + 500 + Math.random() * 300 : ext * (0.5 + Math.random() * 0.9) + 60;
+    const x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
+    const w = far ? 60 + Math.random() * 60 : 14 + Math.random() * 22, h = far ? 180 + Math.random() * 140 : 50 + Math.random() * 90;
+    if (!far && !clearOf(x, z, w + hw + 16)) continue;
+    rocks.push([x, z, w, h]);
+  }
+  const karst = inst(karstGeo, new THREE.MeshLambertMaterial({ color: '#a39d8e' }), rocks.length);
+  const caps = inst(capGeo, new THREE.MeshLambertMaterial({ color: '#3d7d34' }), rocks.length);
+  rocks.forEach(([x, z, w, h], i) => {
+    q.setFromEuler(e.set(0, Math.random() * 6, 0));
+    karst.setMatrixAt(i, m.compose(p.set(x, -2, z), q, sc.set(w, h, w)));
+    caps.setMatrixAt(i, m.compose(p.set(x, h - 4, z), q, sc.set(w * 0.5, w * 0.3, w * 0.5)));
+  });
+  q.identity();
+
+  // Red lattice tower under the first jump
+  const red = new THREE.MeshLambertMaterial({ color: '#c61f2b' });
+  const tw = track.marks?.tower;
+  if (tw) {
+    const d = new THREE.Vector3(Math.sin(tw.yaw), 0, Math.cos(tw.yaw));
+    const at = tw.pos.clone().addScaledVector(d, -24);
+    const h = Math.max(4, at.y - 4), g = new THREE.Group(); // top sits just under the jump
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.8, h, 0.8), red);
+      leg.position.set(sx * 3, h / 2, sz * 3);
+      g.add(leg);
+    }
+    for (let y = 4; y < h; y += 5) {
+      const ring = new THREE.Mesh(new THREE.BoxGeometry(6.8, 0.5, 6.8), red);
+      ring.position.y = y;
+      g.add(ring);
+    }
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(16, 5, 0.6), new THREE.MeshBasicMaterial({ color: '#1f6fd6' }));
+    sign.position.y = h - 3;
+    g.add(sign);
+    g.position.set(at.x, 0, at.z);
+    g.rotation.y = tw.yaw;
+    g.traverse((o) => (o.castShadow = true));
+    scene.add(g);
+  }
+
+  // Yellow crane beside the jungle bridge
+  const cr = track.marks?.crane;
+  if (cr) {
+    const yel = new THREE.MeshLambertMaterial({ color: '#f2c21b' });
+    const side = new THREE.Vector3(-Math.cos(cr.yaw), 0, Math.sin(cr.yaw));
+    const base = cr.pos.clone().addScaledVector(side, hw + 22);
+    const g = new THREE.Group();
+    const mast = new THREE.Mesh(new THREE.BoxGeometry(3, 60, 3), yel);
+    mast.position.y = 30;
+    const boom = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 70), yel);
+    boom.position.set(0, 58, -18);
+    boom.rotation.x = -0.25;
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(5, 4, 5), new THREE.MeshLambertMaterial({ color: '#333' }));
+    cab.position.y = 56;
+    g.add(mast, boom, cab);
+    g.position.set(base.x, 0, base.z);
+    g.lookAt(cr.pos.x, 0, cr.pos.z);
+    g.traverse((o) => (o.castShadow = true));
+    scene.add(g);
+  }
+
+  // Blimp drifting over the lagoon
+  const blimp = new THREE.Group();
+  const hull = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), new THREE.MeshLambertMaterial({ color: '#8b3fd9' }));
+  hull.scale.set(9, 9, 30);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(9.15, 9.15, 6, 20, 1, true), new THREE.MeshBasicMaterial({ color: '#ffd400', side: THREE.DoubleSide }));
+  band.rotation.x = Math.PI / 2;
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.6, 12, 8), new THREE.MeshLambertMaterial({ color: '#ffd400' }));
+  fin.position.set(0, 5, -26);
+  blimp.add(hull, band, fin);
+  blimp.position.set(c.x + 60, 120, c.z - 40);
+  blimp.rotation.y = 0.8;
+  scene.add(blimp);
 }
 
 /** Half the size of the track's footprint (for sizing scenery). */
