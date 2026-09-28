@@ -53,17 +53,22 @@ export class BotBrain {
     }
   }
 
-  think(dt, bot, karts, items, now) {
+  /**
+   * ctx.isEnemy(k): who may be shot (team games); ctx.goal: { x, z, urgent }
+   * an objective to head for (flag, zone, bomb site) instead of hunting.
+   */
+  think(dt, bot, karts, items, now, ctx = {}) {
+    const isEnemy = ctx.isEnemy || ((k) => k !== bot);
     const input = { throttle: 1, steer: 0, boost: false, drift: false, fire: false, rocket: false };
     const world = this.world;
 
     // Pick a target: nearest living kart, humans slightly preferred
     this.retarget -= dt;
-    if (this.retarget <= 0 || !this.target || !this.target.alive) {
+    if (this.retarget <= 0 || !this.target || !this.target.alive || !isEnemy(this.target)) {
       this.retarget = 1.2 + Math.random();
       let best = null, bestD = 130;
       for (const k of karts) {
-        if (k === bot || !k.alive) continue;
+        if (k === bot || !k.alive || !isEnemy(k)) continue;
         let d = k.pos.distanceTo(bot.pos);
         if (!k.bot) d *= 0.75;
         if (d < bestD) { bestD = d; best = k; }
@@ -79,8 +84,22 @@ export class BotBrain {
     const healthItem = lowHp ? nearestItem(items, 'health', bot.pos) : null;
     const rocketItem = bot.rockets === 0 ? nearestItem(items, 'rocket', bot.pos) : null;
     const weaponItem = !Object.keys(bot.inv || {}).length ? nearestItem(items, 'weapon', bot.pos) : null;
+    const goal = ctx.goal;
+    const goalD = goal ? Math.hypot(goal.x - bot.pos.x, goal.z - bot.pos.z) : Infinity;
+    const fightNear = t && t.pos.distanceTo(bot.pos) < 30;
+    this.onGoal = false;
     if (healthItem) {
       gx = healthItem.x; gz = healthItem.z;
+    } else if (goal && (goal.urgent || !fightNear)) {
+      // Play the objective: drive there, then circle inside it
+      if (goalD < 5) {
+        this.onGoal = true;
+        const a = now * 0.0015 * this.orbit;
+        gx = goal.x + Math.cos(a) * 4;
+        gz = goal.z + Math.sin(a) * 4;
+      } else {
+        gx = goal.x; gz = goal.z;
+      }
     } else if (weaponItem && weaponItem.dist < 45) {
       gx = weaponItem.x; gz = weaponItem.z;
     } else if (t) {
@@ -106,6 +125,7 @@ export class BotBrain {
     let diff = angleDiff(bot.heading, desired);
     input.steer = Math.max(-1, Math.min(1, diff * 2.2));
     if (Math.abs(diff) > 1.8) input.throttle = 0.5;
+    if (this.onGoal) input.throttle = Math.min(input.throttle, 0.45);
 
     // Obstacle avoidance feelers
     const probe = (ang, dist) => {

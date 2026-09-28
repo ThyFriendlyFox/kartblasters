@@ -6,6 +6,7 @@ import { Fx, SkidMarks } from './fx.js';
 import { BotBrain, BOT_NAMES, botColor } from './bots.js';
 import { musicFor } from './music.js';
 import { unlock } from './achievements.js';
+import { Match, TEAMS, resultsHTML } from './modes.js';
 import { Hud } from './hud.js';
 import { WEAPONS, SLOTS, MAX_AMMO_MULT, projectileMesh, botPreference } from './weapons.js';
 
@@ -31,7 +32,7 @@ const Z = new THREE.Vector3(0, 0, 1);
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 export class Game {
-  constructor({ net, name, color, car, botCount, sfx, code, welcome, map = 'stadium', destructible = false, mobile = null, mods = {} }) {
+  constructor({ net, name, color, car, botCount, sfx, code, welcome, map = 'stadium', destructible = false, mobile = null, mods = {}, rule = 'ffa', tour = null }) {
     this.mobile = mobile;
     this.mods = { size: 1, endless: false, damage: false, ...(welcome?.mods || mods) };
     document.body.classList.add('mode-battle');
@@ -59,6 +60,8 @@ export class Game {
       this.camera.far = 1200;
       this.camera.updateProjectionMatrix();
     }
+    // The game type (and tournament) being played, with its win condition
+    this.match = new Match(this, welcome?.rule || rule, welcome?.tour || tour, welcome?.obj || null);
     this.digs = []; // crater history, replayed for players who join later
     this.blockHits = new Map();
     this.fx = new Fx(this.scene);
@@ -81,7 +84,8 @@ export class Game {
 
     this.me = this.makeKart({ id: net.myId, name, color, car, local: true });
     this.karts.set(net.myId, this.me);
-    this.players.set(net.myId, { name, color, car, kills: 0, deaths: 0, bot: false });
+    this.players.set(net.myId, { name, color, car, kills: 0, deaths: 0, bot: false, team: this.match.teams ? this.match.pickTeam() : null, tp: 0 });
+    this.applyTeam(net.myId);
 
     this.buildItems();
     this.bindInput();
@@ -196,16 +200,25 @@ export class Game {
     const car = CAR_IDS[Math.floor(Math.random() * CAR_IDS.length)];
     const kart = this.makeKart({ id, name, color, car, bot: true });
     this.karts.set(id, kart);
-    this.players.set(id, { name, color, car, kills: 0, deaths: 0, bot: true });
+    this.players.set(id, { name, color, car, kills: 0, deaths: 0, bot: true, team: this.match.teams ? this.match.pickTeam() : null, tp: 0 });
+    this.applyTeam(id);
     this.bots.push({ kart, brain: new BotBrain(this.world) });
     this.spawnKart(kart);
   }
 
-  addPlayer(id, name, color, car, bot = false, kills = 0, deaths = 0) {
+  addPlayer(id, name, color, car, bot = false, kills = 0, deaths = 0, team = null, tp = 0) {
     name = String(name || 'Racer').slice(0, 16);
     color = /^#[0-9a-f]{6}$/i.test(color) ? color : '#ffffff';
-    this.players.set(id, { name, color, car, kills, deaths, bot });
+    if (this.match.teams && team !== 0 && team !== 1) team = this.net.isHost ? this.match.pickTeam() : null;
+    this.players.set(id, { name, color, car, kills, deaths, bot, team: this.match.teams ? team : null, tp: +tp || 0 });
     if (!this.karts.has(id)) this.karts.set(id, this.makeKart({ id, name, color, car }));
+    this.applyTeam(id);
+  }
+
+  /** Show a player's team on their car. */
+  applyTeam(id) {
+    const p = this.players.get(id), k = this.karts.get(id);
+    k?.setTeam(p && p.team != null ? TEAMS[p.team].color : null);
   }
 
   removePlayer(id) {
@@ -254,7 +267,7 @@ export class Game {
       }
       this.refreshCarSwap();
     }
-    k.spawnAt(this.pickSpawn(), performance.now());
+    k.spawnAt(this.match.spawnFor(k) || this.pickSpawn(), performance.now());
     k.pos.y = this.world.groundAt(k.pos.x, k.pos.z);
     if (k === this.me) this.hud.clearCenter();
   }
@@ -297,7 +310,7 @@ export class Game {
     document.addEventListener('pointerlockchange', () => {
       if (this.mobile) return;
       this.locked = document.pointerLockElement === c;
-      overlay.classList.toggle('hidden', this.locked || this.gameOver);
+      overlay.classList.toggle('hidden', this.locked || this.gameOver || this.resultsOpen);
       if (!this.locked) this.mouse.left = this.mouse.right = false;
     });
     if (this.mobile) {
@@ -402,21 +415,30 @@ export class Game {
           t: 'welcome',
           mode: 'battle',
           map: this.mapId,
+          rule: this.match.rule,
+          tour: this.match.tour,
+          obj: this.match.s,
           mods: this.mods,
           destructible: this.destructible,
           digs: this.digs,
           broken: this.world.pieces.filter((b) => b.dead).map((b) => b.id),
-          players: [...this.players.entries()].map(([id, q]) => [id, q.name, q.color, q.car, q.bot ? 1 : 0, q.kills, q.deaths]),
+          players: [...this.players.entries()].map(([id, q]) => [id, q.name, q.color, q.car, q.bot ? 1 : 0, q.kills, q.deaths, q.team, q.tp || 0]),
           items: [...this.items.values()].map((it) => [it.id, it.active ? 1 : 0]),
         });
-        this.net.sendExcept(from, { t: 'pj', id: from, name: p.name, color: p.color, car: p.car });
+        this.net.sendExcept(from, { t: 'pj', id: from, name: p.name, color: p.color, car: p.car, team: p.team });
         this.hud.feed(`<span style="color:${esc(p.color)}">${esc(p.name)}</span> joined`);
         break;
       }
       case 'welcome': {
-        for (const [id, name, color, car, bot, kills, deaths] of m.players) {
-          if (id === this.me.id) continue;
-          this.addPlayer(id, name, color, car, !!bot, kills, deaths);
+        for (const [id, name, color, car, bot, kills, deaths, team, tp] of m.players) {
+          if (id === this.me.id) {
+            const me = this.players.get(id);
+            me.team = this.match.teams && (team === 0 || team === 1) ? team : null;
+            me.tp = +tp || 0;
+            this.applyTeam(id);
+            continue;
+          }
+          this.addPlayer(id, name, color, car, !!bot, kills, deaths, team, tp);
         }
         for (const [id, active] of m.items) {
           const it = this.items.get(id);
@@ -430,7 +452,7 @@ export class Game {
       }
       case 'pj':
         if (m.id !== this.me.id) {
-          this.addPlayer(m.id, m.name, m.color, m.car);
+          this.addPlayer(m.id, m.name, m.color, m.car, false, 0, 0, m.team);
           const p = this.players.get(m.id);
           this.hud.feed(`<span style="color:${esc(p.color)}">${esc(p.name)}</span> joined`);
         }
@@ -461,6 +483,28 @@ export class Game {
         break;
       case 'h':
         this.onRemoteHit(m);
+        break;
+      // Match rules (sent by the host)
+      case 'obj':
+        if (!host && m.s) this.match.s = m.s;
+        break;
+      case 'ann':
+        if (!host) this.match.onAnnounce(m);
+        break;
+      case 'rnd':
+        if (!host) this.match.onRound(m);
+        break;
+      case 'boom':
+        if (!host) this.match.onBoom(m);
+        break;
+      case 'mend':
+        if (!host) this.onMatchEnd(m);
+        break;
+      case 'mnext':
+        if (!host) this.loadMatch(m);
+        break;
+      case 'teams':
+        if (!host) this.onTeams(m);
         break;
       case 'k':
         if (m.v !== m.i && !this.isBot(m.v)) return;
@@ -1138,7 +1182,8 @@ export class Game {
 
   damageMe(dmg, by, weapon, now, dir, quiet = false) {
     const me = this.me;
-    if (!me.alive || now < me.shieldUntil) return;
+    if (!me.alive || now < me.shieldUntil || this.match.s.over) return;
+    if (by !== me.id && !this.match.hostile(by, me.id)) return; // no friendly fire
     me.hp -= dmg;
     if (!quiet || Math.random() < 0.15) {
       this.hud.damage(dmg);
@@ -1149,7 +1194,7 @@ export class Game {
     if (me.hp <= 0) {
       me.hp = 0;
       me.alive = false;
-      me.respawnAt = now + RESPAWN_MS;
+      me.respawnAt = this.match.oneLife ? Infinity : now + RESPAWN_MS;
       const m = { t: 'k', v: me.id, by, w: weapon };
       this.net.send(m);
       this.onKill(m);
@@ -1157,6 +1202,7 @@ export class Game {
   }
 
   damageBot(id, dmg, by, weapon, now) {
+    if (!this.match.hostile(by, id) || this.match.s.over) return;
     if (by === this.me.id) {
       this.hud.hit(false);
       this.sfx.play('hitmark');
@@ -1167,12 +1213,13 @@ export class Game {
 
   applyBotDamage(id, dmg, by, weapon, now = performance.now()) {
     const k = this.karts.get(id);
-    if (!k?.bot || !k.alive || now < k.shieldUntil) return;
+    if (!k?.bot || !k.alive || now < k.shieldUntil || this.match.s.over) return;
+    if (by !== id && !this.match.hostile(by, id)) return;
     k.hp -= dmg;
     if (k.hp <= 0) {
       k.hp = 0;
       k.alive = false;
-      k.respawnAt = now + RESPAWN_MS;
+      k.respawnAt = this.match.oneLife ? Infinity : now + RESPAWN_MS;
       const m = { t: 'k', v: id, by, w: WEAPONS[weapon] || weapon === 'wall' ? weapon : 'blaster' };
       this.net.send(m);
       this.onKill(m);
@@ -1184,7 +1231,8 @@ export class Game {
     const killer = this.players.get(m.by);
     if (!victim) return;
     victim.deaths++;
-    if (killer && m.by !== m.v) killer.kills++;
+    if (killer && m.by !== m.v && this.match.hostile(m.by, m.v)) killer.kills++;
+    if (this.net.isHost) this.match.onKill(m);
     const k = this.karts.get(m.v);
     if (k) {
       if (k.alive || k === this.me || k.bot) {
@@ -1330,14 +1378,17 @@ export class Game {
         me.aimYaw -= dx * 0.0065;
         me.aimPitch = Math.max(this.pitchMin, Math.min(this.pitchMax, me.aimPitch - dy * 0.005));
       }
-      if (this.locked && (this.mouse.left || m?.fire)) {
+      const live = !this.match.s.over;
+      if (live && this.locked && (this.mouse.left || m?.fire)) {
         this.tryFire(me, me.weapon, now);
         if (me.weapon2) this.tryFire(me, me.weapon2, now, 1);
       }
-      if (this.locked && (this.mouse.right || m?.rocket || this.keys.has('KeyE') || this.keys.has('KeyQ'))) this.tryFire(me, 'rocket', now);
+      if (live && this.locked && (this.mouse.right || m?.rocket || this.keys.has('KeyE') || this.keys.has('KeyQ'))) this.tryFire(me, 'rocket', now);
     } else if (this.joined && me.respawnAt && now >= me.respawnAt) {
       me.respawnAt = 0;
       this.spawnKart(me);
+    } else if (this.joined && me.respawnAt === Infinity) {
+      if (!this.match.s.over) this.hud.center('OUT', 'One life per round: back in next round', 0);
     } else if (this.joined && me.respawnAt) {
       const s = Math.ceil((me.respawnAt - now) / 1000);
       const killer = this.killerId && this.players.get(this.killerId);
@@ -1350,7 +1401,11 @@ export class Game {
         if (now >= kart.respawnAt) this.spawnKart(kart);
         continue;
       }
-      const input = brain.think(dt, kart, all, this.items, now);
+      const input = brain.think(dt, kart, all, this.items, now, {
+        goal: this.match.botGoal(kart),
+        isEnemy: (o) => o !== kart && this.match.hostile(kart.id, o.id),
+      });
+      if (this.match.s.over) input.fire = input.rocket = false;
       this.botWeapon(kart, brain);
       const ev = kart.simulate(dt, input, this.world, all);
       this.kartEvents(kart, ev);
@@ -1361,6 +1416,10 @@ export class Game {
       }
       if (input.rocket) this.tryFire(kart, 'rocket', now);
     }
+
+    // Match rules: the host referees, everyone draws the objectives
+    if (this.net.isHost && this.joined) this.match.hostTick(dt, now);
+    this.match.render(dt, now);
 
     // Remote karts
     for (const k of all) {
@@ -1394,9 +1453,9 @@ export class Game {
     this.hud.weaponBar(me);
     this.hud.tick(now);
     this.hud.room(this.net.offline ? null : this.code, [...this.players.values()].filter((p) => !p.bot).length);
-    this.hud.board(this.players, me.id);
-    this.hud.scoreboard(this.players, me.id, this.keys.has('Tab'));
-    if ((this.mapTick = (this.mapTick || 0) + 1) % 2 === 0) this.hud.minimap(this.world, this.karts, this.items, me);
+    this.hud.board(this.players, me.id, this.match.teams);
+    this.hud.scoreboard(this.players, me.id, this.keys.has('Tab'), this.match.teams);
+    if ((this.mapTick = (this.mapTick || 0) + 1) % 2 === 0) this.hud.minimap(this.world, this.karts, this.items, me, this.match.marks());
   }
 
   /** Tire smoke, skid marks and sparks that heat up the longer a drift is held (as in race mode). */
@@ -1475,6 +1534,154 @@ export class Game {
     if (Math.abs(cam.fov - fov) > 0.1) {
       cam.fov += (fov - cam.fov) * Math.min(1, dt * 6);
       cam.updateProjectionMatrix();
+    }
+  }
+
+  /** Everyone: the match is over. Show the results (and tournament standings). */
+  onMatchEnd(m) {
+    const over = m.over;
+    if (!over || this.resultsShownFor === over) return;
+    this.resultsShownFor = over;
+    if (!this.net.isHost) {
+      this.match.s.over = over;
+      if (Array.isArray(m.scores)) this.match.s.scores = m.scores;
+    }
+    // Tournament points
+    for (const [id, pts] of Object.entries(over.pts || {})) {
+      const p = this.players.get(id);
+      if (p) p.tp = (p.tp || 0) + (+pts || 0);
+    }
+    const mine = this.match.teams ? this.players.get(this.me.id)?.team === over.winner : over.winner === this.me.id;
+    this.sfx.play(mine ? 'kill' : 'lap');
+    const tour = this.match.tour;
+    const last = !tour || tour.idx >= tour.matches.length - 1;
+    const el = document.getElementById('results');
+    const { head, body } = resultsHTML(this, over);
+    el.querySelector('h2').innerHTML = `${mine ? '🏆 ' : ''}${head}`;
+    let box = el.querySelector('.battleResults');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'battleResults';
+      el.querySelector('table').replaceWith(box);
+    }
+    box.innerHTML = body;
+    el.querySelector('.gpWrap').innerHTML = '';
+    el.querySelector('.achWrap').innerHTML = '';
+    const btn = document.getElementById('startRace'), hint = el.querySelector('.hint');
+    btn.classList.toggle('hidden', !this.net.isHost);
+    if (tour && !last) {
+      const next = tour.matches[tour.idx + 1];
+      btn.textContent = 'Next match';
+      hint.textContent = `Next: ${next[0].toUpperCase()} on ${next[1]} · starting automatically…`;
+      if (this.net.isHost) this.nextTimer = setTimeout(() => this.nextMatch(), 12000);
+    } else {
+      btn.textContent = tour ? 'New tournament' : 'Rematch';
+      hint.textContent = this.net.isHost ? '' : 'Waiting for the host…';
+    }
+    btn.onclick = () => this.nextMatch();
+    let menuBtn = el.querySelector('.toMenu');
+    if (!menuBtn) {
+      menuBtn = document.createElement('button');
+      menuBtn.className = 'ghost toMenu';
+      menuBtn.textContent = 'Back to menu';
+      menuBtn.onclick = () => this.exit();
+      el.querySelector('.panel').appendChild(menuBtn);
+    }
+    this.resultsOpen = true;
+    document.exitPointerLock?.();
+    this.locked = false;
+    document.getElementById('clickToPlay').classList.add('hidden');
+    el.classList.remove('hidden');
+  }
+
+  /** Host: go on to the next tournament match (or play it all again). */
+  nextMatch() {
+    if (!this.net.isHost) return;
+    clearTimeout(this.nextTimer);
+    const tour = this.match.tour;
+    let m;
+    if (tour) {
+      const idx = tour.idx >= tour.matches.length - 1 ? 0 : tour.idx + 1;
+      const fresh = idx === 0;
+      const [rule, map] = tour.matches[idx];
+      m = { t: 'mnext', map, rule, tour: { ...tour, idx }, fresh };
+    } else m = { t: 'mnext', map: this.mapId, rule: this.match.rule, tour: null, fresh: false };
+    this.net.send(m);
+    this.loadMatch(m);
+  }
+
+  /** Everyone: tear down this arena and set up the next match in place. */
+  loadMatch(m) {
+    clearTimeout(this.nextTimer);
+    this.resultsOpen = false;
+    this.resultsShownFor = null;
+    document.getElementById('results').classList.add('hidden');
+    for (const p of this.projectiles) this.killProjectile(p);
+    this.projectiles = [];
+    this.exploded.clear();
+    this.blockHits.clear();
+    this.digs = [];
+    // A new scene with the new arena; the cars move across
+    const old = this.scene;
+    for (const k of this.karts.values()) old.remove(k.root);
+    this.match.dispose();
+    old.traverse((o) => {
+      o.geometry?.dispose();
+      if (Array.isArray(o.material)) o.material.forEach((x) => x.dispose());
+      else o.material?.dispose?.();
+    });
+    this.scene = new THREE.Scene();
+    this.mapId = m.map;
+    this.world = buildArena(this.scene, { map: this.mapId, destructible: this.destructible });
+    [this.pitchMin, this.pitchMax] = this.world.surface ? [-0.9, 1.25] : [-0.35, 0.55];
+    this.camera.far = this.mapId === 'daytona' ? 1200 : 600;
+    this.camera.updateProjectionMatrix();
+    this.fx = new Fx(this.scene);
+    this.skids = new SkidMarks(this.scene);
+    this.items = new Map();
+    this.buildItems();
+    this.match = new Match(this, m.rule, m.tour || null);
+    // Host deals fresh, even teams for each match: people spread first, then bots
+    const deal = new Map();
+    if (this.net.isHost && this.match.teams) {
+      const ids = [...this.players.keys()];
+      const mix = (a) => a.map((x) => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map((p) => p[1]);
+      [...mix(ids.filter((id) => !this.players.get(id).bot)), ...mix(ids.filter((id) => this.players.get(id).bot))].forEach((id, i) => deal.set(id, i % 2));
+    }
+    for (const [id, k] of this.karts) {
+      this.scene.add(k.root);
+      k.scene = this.scene;
+      k.world = this.world;
+      for (const n of k.needles || []) k.root.remove(n);
+      k.needles = [];
+      const p = this.players.get(id);
+      if (p) {
+        p.kills = p.deaths = 0;
+        if (m.fresh) p.tp = 0;
+        // Teams are dealt again for each match
+        p.team = this.match.teams ? (this.net.isHost ? deal.get(id) ?? 0 : p.team) : null;
+      }
+    }
+    for (const b of this.bots) b.brain = new BotBrain(this.world);
+    if (this.net.isHost) {
+      // Tell everyone the new teams
+      const teams = [...this.players].map(([id, p]) => [id, p.team]);
+      this.net.send({ t: 'teams', v: teams });
+      this.onTeams({ v: teams });
+      for (const { kart } of this.bots) this.spawnKart(kart);
+    }
+    this.spawnKart(this.me);
+    this.playMapMusic();
+    const d = this.match.def;
+    this.hud.center(`${d.icon} ${d.name.toUpperCase()}`, d.desc, 3000);
+    document.getElementById('clickToPlay').classList.remove('hidden');
+  }
+
+  onTeams(m) {
+    for (const [id, t] of m.v || []) {
+      const p = this.players.get(id);
+      if (p) p.team = this.match.teams && (t === 0 || t === 1) ? t : null;
+      this.applyTeam(id);
     }
   }
 

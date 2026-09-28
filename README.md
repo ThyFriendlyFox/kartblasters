@@ -13,9 +13,9 @@ Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no ga
 The menu is split into sections, one step at a time (a row of steps at the top shows where you are):
 
 1. **Play:** Solo (vs AI, offline), Host online, or Join a friend.
-2. **Mode:** Race, Grand Prix or Battle.
+2. **Mode:** Race, Grand Prix, Battle or Tournament.
 3. **Car:** name, car, colour (with its stat bars).
-4. **Track / Cup / Arena** and the options below. Grand Prix cups are picked from medallion cards: 🏁 Classic, ⛰️ Epic, 🌈 Everything and 🎲 Random.
+4. **Track / Cup / Arena / Tournament** and the options below. Grand Prix cups are picked from medallion cards: 🏁 Classic, ⛰️ Epic, 🌈 Everything and 🎲 Random. Battle also has a **Game type** picker, and tournaments have their own medal cards (see below).
 5. **Lobby** (online): the room code and invite link, everyone who's joined with their car, the host's settings, and a START button for the host. Friends who join wait here; anyone can change car from the lobby. People who join after the race has started go straight in.
 
 Joining a friend goes: car → room code → lobby. Invite links (`?room=CODE`) skip to the car screen. Arrow keys move between choices, Esc goes back.
@@ -76,6 +76,33 @@ The menu shows an aerial preview of the selected map with its lap length and a r
 | Crater Field | Battle | Rolling hills with brick forts and stone pillars |
 | Daytona Speedway | Battle | A scaled-down superspeedway: 31° banked turns, an 18° tri-oval dogleg and a 3° back straight inside a SAFER wall and catch fence, with grandstands, and an infield (pit road, garages, Lake Lloyd, barriers) to fight in |
 | Rocket Cube | Battle | Rocket League style arena with rounded edges: drive up the walls and over the ceiling. Your tyres grip harder the faster you go, so walls are easy, but only a boosting car can stay on the ceiling; slow down and gravity pulls you off |
+
+### Battle game types
+
+Pick one on the arena screen. Every game type has a win condition and a time limit (whoever's ahead when time runs out wins; level scores are a draw). The score, clock and objective status sit in a bar at the top of the screen, the objectives are on the minimap, and the match ends on a results screen (the host can start a rematch).
+
+| Game type | How to win |
+| --- | --- |
+| 💀 Free for All | Every car for itself. First to 15 kills (6 min) |
+| ⚔️ Team Deathmatch | Red vs Blue. First team to 30 kills (7 min) |
+| 🚩 Capture the Flag | Drive over the enemy flag to grab it and bring it back to your base while your own flag is at home. Wreck a carrier to drop their flag; touch your dropped flag to send it home (it goes back by itself after 25 s). First to 3 captures (8 min) |
+| 💣 Search & Destroy | One life per round. Attackers plant the bomb by holding a car inside site A or B for 3 s; defenders stop them, or defuse a planted bomb by staying next to it for 5 s. The bomb goes off after 35 s. Wipe out the other team, blow the bomb, defuse it or run out the 2-minute clock (defenders win). Sides swap every round; first to 4 rounds |
+| 🏳️ Domination | Park in zones A, B and C to take them (more cars take them faster; both teams inside means nobody does). Every zone you hold scores a point a second. First to 200 (8 min) |
+
+In team games everyone is dealt into Red or Blue (people first, then AI, kept even), cars get a ring and name tag in their team colour, and there's no friendly fire. AI cars play the objective: they run flags home, chase your carrier, hold zones, plant and defuse.
+
+### Tournaments
+
+Battle's version of a Grand Prix: a run of matches on different arenas and game types, played for points. After each match there's a results screen with the standings, then the next match starts by itself.
+
+| Tournament | Matches |
+| --- | --- |
+| 🥉 Rookie Rumble | Free for All (Stadium) → Team Deathmatch (Crater Field) → Domination (Rocket Cube) |
+| 🥈 Team Clash | Team Deathmatch (Stadium) → Capture the Flag (Crater Field) → Domination (Daytona) → Search & Destroy (Rocket Cube) |
+| 🥇 Grand Tournament | Free for All (Rocket Cube) → Team Deathmatch (Daytona) → Capture the Flag (Stadium) → Domination (Crater Field) → Search & Destroy (Stadium) |
+| 🎲 Random Tournament | 4 random game types on random arenas |
+
+Points: in Free for All, 10-8-6-5-4-3-2-1 by kills; in team games the winning team gets 10 each and the losers 4 (6 each for a draw), plus 2 for the match's top fragger.
 
 ### Weapons (battle)
 

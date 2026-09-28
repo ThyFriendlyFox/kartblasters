@@ -168,6 +168,24 @@ export class Kart {
     this.barrel = barrel;
     root.visible = false;
     this.scene.add(root);
+    this.teamRing = null;
+    if (this.teamColor) this.setTeam(this.teamColor);
+  }
+
+  /** Team games: a glowing ring in the team colour under the car, and a team-coloured name. */
+  setTeam(color) {
+    this.teamColor = color || null;
+    if (!this.teamRing && color) {
+      this.teamRing = new THREE.Mesh(new THREE.RingGeometry(2.3, 2.8, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }));
+      this.teamRing.rotation.x = -Math.PI / 2;
+      this.teamRing.position.y = 0.15;
+      this.root.add(this.teamRing);
+    }
+    if (this.teamRing) {
+      this.teamRing.visible = !!color;
+      if (color) this.teamRing.material.color.set(color);
+    }
+    this.tagHp = -1; // redraw the name tag
   }
 
   drawTag() {
@@ -181,7 +199,7 @@ export class Kart {
     g.lineWidth = 6;
     g.strokeStyle = 'rgba(0,0,0,0.75)';
     g.strokeText(this.name, 128, 32);
-    g.fillStyle = this.color;
+    g.fillStyle = this.teamColor || this.color;
     g.fillText(this.name, 128, 32);
     g.fillStyle = 'rgba(0,0,0,0.6)';
     g.fillRect(48, 46, 160, 16);

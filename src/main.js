@@ -7,6 +7,7 @@ import { isTouchDevice, requestMotionPermission, enterLandscape, MobileInput } f
 import { CARS, CAR_IDS, carImage, preloadCarImages, statBarsHTML } from './cars.js';
 import { TRACKS, TRACK_IDS } from './trackdefs.js';
 import { mapPreview } from './preview.js';
+import { RULES, RULE_IDS, TOURNAMENTS, randomTournament } from './modes.js';
 
 // Initialize Vercel Analytics
 inject();
@@ -47,6 +48,7 @@ const MAPS = {
     ['all', `Everything Cup — all ${TRACK_IDS.length} tracks`],
     ['random', 'Random Cup — 4 random tracks'],
   ],
+  tourney: Object.entries(TOURNAMENTS).map(([id, t]) => [id, t.name]),
   battle: [
     ['stadium', 'Stadium — arena with cover, jump pads and pickups'],
     ['craters', 'Crater Field — rolling hills and block forts'],
@@ -59,7 +61,7 @@ let color = store.get('kb-color', COLORS[Math.floor(Math.random() * COLORS.lengt
 if (!COLORS.includes(color)) color = COLORS[0];
 let car = store.get('kb-car', 'hyper');
 if (!CARS[car]) car = 'hyper';
-let mode = ['race', 'gp', 'battle'].includes(store.get('kb-mode', 'race')) ? store.get('kb-mode', 'race') : 'race';
+let mode = ['race', 'gp', 'battle', 'tourney'].includes(store.get('kb-mode', 'race')) ? store.get('kb-mode', 'race') : 'race';
 $('name').value = store.get('kb-name', '');
 
 // ---- car picker (thumbnails are re-rendered in the chosen color)
@@ -111,16 +113,19 @@ function refreshMode() {
   for (const b of $('modeSeg').children) b.classList.toggle('on', b.dataset.mode === mode);
   const prev = store.get(`kb-map-${mode}`, MAPS[mode][0][0]);
   $('map').innerHTML = MAPS[mode].map(([id, label]) => `<option value="${id}"${id === prev ? ' selected' : ''}>${label}</option>`).join('');
-  $('mapLabel').textContent = { race: 'Track', gp: 'Cup', battle: 'Arena' }[mode];
-  // Grand Prix: pick a cup from big medallion cards instead of a dropdown
-  $('cupPick').classList.toggle('hidden', mode !== 'gp');
-  $('mapWrap').classList.toggle('hidden', mode === 'gp');
-  if (mode === 'gp') renderCups();
+  $('mapLabel').textContent = { race: 'Track', gp: 'Cup', battle: 'Arena', tourney: 'Tournament' }[mode];
+  // Grand Prix and tournaments: pick from big medallion cards instead of a dropdown
+  const cups = mode === 'gp' || mode === 'tourney', fight = mode === 'battle' || mode === 'tourney';
+  $('cupPick').classList.toggle('hidden', !cups);
+  $('mapWrap').classList.toggle('hidden', cups);
+  $('ruleWrap').classList.toggle('hidden', mode !== 'battle');
+  $('ruleDesc').classList.toggle('hidden', mode !== 'battle');
+  if (cups) renderCups();
   showPreview();
-  $('lapsWrap').classList.toggle('hidden', mode === 'battle');
-  $('destructWrap').classList.toggle('hidden', mode !== 'battle');
-  $('ctlRace').classList.toggle('hidden', mode === 'battle');
-  $('ctlBattle').classList.toggle('hidden', mode !== 'battle');
+  $('lapsWrap').classList.toggle('hidden', fight);
+  $('destructWrap').classList.toggle('hidden', !fight);
+  $('ctlRace').classList.toggle('hidden', fight);
+  $('ctlBattle').classList.toggle('hidden', !fight);
 }
 const CUPS = {
   classic: { icon: '🏁', name: 'Classic Cup', color: 'linear-gradient(145deg, #f0b27a, #b86b2d)' },
@@ -131,10 +136,12 @@ const CUPS = {
 function renderCups() {
   const box = $('cupPick');
   box.innerHTML = '';
-  for (const [id, c] of Object.entries(CUPS)) {
+  const tourney = mode === 'tourney';
+  for (const [id, c] of Object.entries(tourney ? TOURNAMENTS : CUPS)) {
     const b = document.createElement('button');
     b.className = 'cupBtn' + ($('map').value === id ? ' on' : '');
-    b.innerHTML = `<span class="medal" style="--cup:${c.color}">${c.icon}</span><b>${c.name}</b><small>${id === 'random' ? '4 random tracks' : `${cupMaps(id).length} races`}</small>`;
+    const n = tourney ? (c.matches ? `${c.matches.length} matches` : '4 random matches') : id === 'random' ? '4 random tracks' : `${cupMaps(id).length} races`;
+    b.innerHTML = `<span class="medal" style="--cup:${c.color}">${c.icon}</span><b>${c.name}</b><small>${n}</small>`;
     b.onclick = () => {
       $('map').value = id;
       renderCups();
@@ -146,16 +153,24 @@ function renderCups() {
 // Aerial shot of the selected map, rendered from the real map on demand
 function showPreview() {
   if (mode === 'gp' && $('map').value === 'random') randomCup = shuffle(TRACK_IDS).slice(0, 4);
+  if (mode === 'tourney' && $('map').value === 'random') randomTour = randomTournament();
   const cup = mode === 'gp' ? cupMaps($('map').value) : null;
-  // A cup shows its first track
-  const wrap = $('mapPreview'), id = cup ? cup[0] : $('map').value, key = `${mode}:${$('map').value}:${id}`;
+  const tour = mode === 'tourney' ? tourMatches($('map').value) : null;
+  if (mode === 'battle') $('ruleDesc').textContent = `${RULES[$('rule').value]?.icon} ${RULES[$('rule').value]?.desc}`;
+  // A cup shows its first track, a tournament its first arena
+  const wrap = $('mapPreview'), id = cup ? cup[0] : tour ? tour[0][1] : $('map').value, key = `${mode}:${$('map').value}:${id}`;
   wrap.dataset.key = key;
   wrap.classList.add('loading');
-  mapPreview(mode === 'gp' ? 'race' : mode, id)
+  mapPreview(mode === 'gp' ? 'race' : mode === 'tourney' ? 'battle' : mode, id)
     .then(({ url, facts }) => {
       if (wrap.dataset.key !== key) return;
       wrap.querySelector('.shot').style.backgroundImage = `url(${url})`;
-      wrap.querySelector('.facts').textContent = cup ? `${cup.length} races: ${cup.map((m) => TRACKS[m].name).join(' → ')}` : facts.join(' · ');
+      const arena = (m) => MAPS.battle.find(([a]) => a === m)?.[1].split(' — ')[0] || m;
+      wrap.querySelector('.facts').textContent = cup
+        ? `${cup.length} races: ${cup.map((m) => TRACKS[m].name).join(' → ')}`
+        : tour
+          ? `${tour.length} matches: ${tour.map(([r, m]) => `${RULES[r].icon} ${RULES[r].name} (${arena(m)})`).join(' → ')}`
+          : facts.join(' · ');
       wrap.classList.remove('loading');
     })
     .catch((e) => {
@@ -164,6 +179,14 @@ function showPreview() {
     });
 }
 $('map').addEventListener('change', showPreview);
+$('rule').innerHTML = RULE_IDS.map((id) => `<option value="${id}">${RULES[id].icon} ${RULES[id].name}</option>`).join('');
+$('rule').value = RULES[store.get('kb-rule', 'ffa')] ? store.get('kb-rule', 'ffa') : 'ffa';
+$('rule').addEventListener('change', () => {
+  store.set('kb-rule', $('rule').value);
+  showPreview();
+});
+let randomTour = randomTournament();
+const tourMatches = (id) => (id === 'random' ? randomTour : TOURNAMENTS[id]?.matches || TOURNAMENTS.rookie.matches);
 
 $('destruct').checked = store.get('kb-destruct', '1') === '1';
 
@@ -220,10 +243,10 @@ function start(net, code, opts) {
   const info = playerInfo();
   const args = { net, sfx, code, ...info, ...opts };
   if (touch) {
-    args.mobile = new MobileInput(opts.mode === 'battle' ? 'battle' : 'race');
+    args.mobile = new MobileInput(opts.mode === 'battle' || opts.mode === 'tourney' ? 'battle' : 'race');
     document.body.classList.add('ingame');
   }
-  const game = opts.mode === 'battle' ? new Game(args) : new RaceGame(args);
+  const game = opts.mode === 'battle' || opts.mode === 'tourney' ? new Game(args) : new RaceGame(args);
   window.__game = game;
   window.__sfx = sfx;
   if (code) history.replaceState(null, '', `?room=${code}`);
@@ -234,7 +257,11 @@ function hostOpts() {
   // Silly modifiers, chosen by the host and shared with everyone who joins
   const mods = { size: +$('carSize').value, endless: $('endless').checked, damage: $('wallDamage').checked };
   const gp = mode === 'gp' ? [...cupMaps($('map').value)] : null;
-  return { mode, map: gp ? gp[0] : $('map').value, gp, botCount: +$('bots').value, laps: +$('laps').value, destructible: $('destruct').checked, mods };
+  if (mode === 'tourney') {
+    const matches = tourMatches($('map').value).map((m) => [...m]);
+    return { mode, map: matches[0][1], rule: matches[0][0], tour: { id: $('map').value, matches, idx: 0 }, botCount: +$('bots').value, destructible: $('destruct').checked, mods };
+  }
+  return { mode, map: gp ? gp[0] : $('map').value, gp, rule: $('rule').value, botCount: +$('bots').value, laps: +$('laps').value, destructible: $('destruct').checked, mods };
 }
 
 // ================= menu screens =================
@@ -250,7 +277,7 @@ const LAYERS = {
   code: ['pad', 'arp', 'bass', 'hat', 'kick', 'snare', 'ohat', 'acid'],
   lobby: ['pad', 'arp', 'bass', 'hat', 'kick', 'snare', 'ohat', 'acid', 'riff', 'lead'],
 };
-const TITLES = { race: ['Select track', 'Track'], gp: ['Select cup', 'Cup'], battle: ['Select arena', 'Arena'] };
+const TITLES = { race: ['Select track', 'Track'], gp: ['Select cup', 'Cup'], battle: ['Select arena', 'Arena'], tourney: ['Select tournament', 'Tournament'] };
 let path = null; // 'solo' | 'host' | 'join'
 let screen = 'start';
 const trail = [];
@@ -265,7 +292,7 @@ function renderSteps() {
   const list = STEPS[path] || ['start'];
   const at = list.indexOf(screen);
   $('steps').innerHTML = list
-    .map((st, i) => `<li class="${i === at ? 'on' : i < at ? 'done' : ''}">${i < at ? '✓ ' : ''}${st === 'track' ? { race: 'Track', gp: 'Cup', battle: 'Arena' }[mode] : STEP_NAMES[st]}</li>`)
+    .map((st, i) => `<li class="${i === at ? 'on' : i < at ? 'done' : ''}">${i < at ? '✓ ' : ''}${st === 'track' ? TITLES[mode][1] : STEP_NAMES[st]}</li>`)
     .join('');
 }
 
@@ -349,17 +376,24 @@ const thumb = (c, col) => {
 };
 
 function settingsSummary(o) {
-  const where = o.mode === 'gp' ? MAPS.gp.find(([id]) => id === $('map').value)?.[1].split(' — ')[0] : o.mode === 'battle' ? MAPS.battle.find(([id]) => id === o.map)?.[1].split(' — ')[0] : TRACKS[o.map]?.name;
+  const fight = o.mode === 'battle' || o.mode === 'tourney';
+  const where = o.mode === 'gp'
+    ? MAPS.gp.find(([id]) => id === $('map').value)?.[1].split(' — ')[0]
+    : o.mode === 'tourney'
+      ? `${TOURNAMENTS[o.tour.id]?.icon} ${TOURNAMENTS[o.tour.id]?.name} (${o.tour.matches.length} matches)`
+      : o.mode === 'battle'
+        ? `${RULES[o.rule]?.icon} ${RULES[o.rule]?.name} · ${MAPS.battle.find(([id]) => id === o.map)?.[1].split(' — ')[0]}`
+        : TRACKS[o.map]?.name;
   const bits = [
-    { race: '🏁 Race', gp: '🏆 Grand Prix', battle: '💥 Battle' }[o.mode],
+    { race: '🏁 Race', gp: '🏆 Grand Prix', battle: '💥 Battle', tourney: '🎖️ Tournament' }[o.mode],
     where,
-    o.mode !== 'battle' && `${o.laps} lap${o.laps > 1 ? 's' : ''}`,
+    !fight && `${o.laps} lap${o.laps > 1 ? 's' : ''}`,
     `${o.botCount || 'no'} AI`,
     o.mods.size > 1.5 && '🐘 Giant cars',
     o.mods.size < 0.8 && '🐭 Tiny cars',
     o.mods.endless && '♾️ Endless nitro',
     o.mods.damage && '💥 Wall damage',
-    o.mode === 'battle' && o.destructible && '💣 Destructible',
+    fight && o.destructible && '💣 Destructible',
   ];
   return { text: bits.filter(Boolean).join(' · '), bots: o.botCount };
 }

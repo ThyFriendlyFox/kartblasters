@@ -39,7 +39,8 @@
         <div class="rows" id="modeSeg">
           <button class="row" data-mode="race"><span class="ring"></span><b>Race</b><small>One track, stunts and shortcuts</small><i>🏁</i></button>
           <button class="row" data-mode="gp"><span class="ring"></span><b>Grand Prix</b><small>A cup of tracks raced for points</small><i>🏆</i></button>
-          <button class="row" data-mode="battle"><span class="ring"></span><b>Battle</b><small>Arena combat with turrets and rockets</small><i>💥</i></button>
+          <button class="row" data-mode="battle"><span class="ring"></span><b>Battle</b><small>Arena combat: free for all, teams, flags, bombs and zones</small><i>💥</i></button>
+          <button class="row" data-mode="tourney"><span class="ring"></span><b>Tournament</b><small>A run of battle matches across arenas, played for points</small><i>🎖️</i></button>
         </div>
       </section>
 
@@ -58,6 +59,8 @@
         <h2 class="secTitle" id="trackTitle">Select track</h2>
         <div class="secBody">
           <div id="cupPick" class="cupPick hidden"></div>
+          <label id="ruleWrap" class="hidden">Game type <select id="rule"></select></label>
+          <p id="ruleDesc" class="ruleDesc hidden"></p>
           <label id="mapWrap"><span id="mapLabel">Track</span> <select id="map"></select></label>
           <div id="mapPreview" class="mapPreview"><div class="shot"></div><p class="facts"></p></div>
           <div class="row2">

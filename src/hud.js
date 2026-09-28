@@ -1,4 +1,5 @@
 import { WEAPONS, SLOTS } from './weapons.js';
+import { TEAMS } from './modes.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -132,19 +133,21 @@ export class Hud {
     return [...players.entries()].sort((a, b) => b[1].kills - a[1].kills || a[1].deaths - b[1].deaths);
   }
 
-  board(players, myId) {
+  board(players, myId, teams = false) {
     const rows = this.sorted(players).slice(0, 6).map(([id, p], i) =>
-      `<div class="row${id === myId ? ' me' : ''}"><span>${i + 1}.</span><span class="dot" style="background:${esc(p.color)}"></span><span class="nm">${esc(p.name)}</span><b>${p.kills}</b></div>`,
+      `<div class="row${id === myId ? ' me' : ''}"${teams && p.team != null ? ` style="box-shadow: inset 3px 0 ${TEAMS[p.team].color}; padding-left: 6px"` : ''}><span>${i + 1}.</span><span class="dot" style="background:${esc(p.color)}"></span><span class="nm">${esc(p.name)}</span><b>${p.kills}</b></div>`,
     );
     const html = rows.join('');
     this.set('board', this.el.board, 'html', html);
   }
 
-  scoreboard(players, myId, visible) {
+  scoreboard(players, myId, visible, teams = false) {
     this.el.scoreboard.classList.toggle('hidden', !visible);
     if (!visible) return;
-    const rows = this.sorted(players).map(([id, p]) =>
-      `<tr class="${id === myId ? 'me' : ''}"><td><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}${p.bot ? ' <small>BOT</small>' : ''}</td><td>${p.kills}</td><td>${p.deaths}</td></tr>`,
+    const list = this.sorted(players);
+    if (teams) list.sort((a, b) => (a[1].team ?? 2) - (b[1].team ?? 2));
+    const rows = list.map(([id, p]) =>
+      `<tr class="${id === myId ? 'me' : ''}"><td><span class="dot" style="background:${esc(teams && p.team != null ? TEAMS[p.team].color : p.color)}"></span>${esc(p.name)}${p.bot ? ' <small>BOT</small>' : ''}</td><td>${p.kills}</td><td>${p.deaths}</td></tr>`,
     );
     this.set('sb', this.el.scoreboard, 'html', `<table><tr><th>Driver</th><th>Kills</th><th>Deaths</th></tr>${rows.join('')}</table>`);
   }
@@ -179,7 +182,7 @@ export class Hud {
     this.wName.textContent = (WEAPONS[k.weapon]?.name || '') + (k.weapon2 ? ` + ${WEAPONS[k.weapon2].name} (left hand)` : '');
   }
 
-  minimap(world, karts, items, me) {
+  minimap(world, karts, items, me, marks = []) {
     const c = this.el.minimap, g = this.mapCtx, S = c.width;
     const scale = S / (world.half * 2 + 8);
     const tx = (x) => S / 2 - x * scale; // mirror X so the map matches the camera's left/right
@@ -212,9 +215,31 @@ export class Hud {
       g.fillStyle = it.type === 'rocket' ? '#ff4d4d' : it.type === 'health' ? '#4ade80' : '#facc15';
       g.fillRect(tx(it.x) - 2, tz(it.z) - 2, 4, 4);
     }
+    // Objectives: bases, flags, zones and bomb sites
+    for (const mk of marks) {
+      g.strokeStyle = mk.color;
+      g.fillStyle = mk.color;
+      if (mk.label) {
+        g.font = 'bold 11px system-ui, sans-serif';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.beginPath();
+        g.arc(tx(mk.x), tz(mk.z), 7, 0, Math.PI * 2);
+        g.globalAlpha = 0.35;
+        g.fill();
+        g.globalAlpha = 1;
+        g.fillStyle = '#fff';
+        g.fillText(mk.label, tx(mk.x), tz(mk.z) + 0.5);
+      } else {
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(tx(mk.x), tz(mk.z), Math.max(4, (mk.r || 4) * scale), 0, Math.PI * 2);
+        g.stroke();
+      }
+    }
     for (const k of karts.values()) {
       if (!k.alive || k === me) continue;
-      g.fillStyle = k.color;
+      g.fillStyle = k.teamColor || k.color;
       g.strokeStyle = '#000';
       g.beginPath();
       g.arc(tx(k.pos.x), tz(k.pos.z), 4, 0, Math.PI * 2);
