@@ -8,6 +8,20 @@ A browser-based, peer-to-peer multiplayer car game with three modes:
 
 Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no game server: the host's browser is the hub.
 
+## Menu
+
+The menu is a run of full-screen steps, like a console kart game:
+
+1. **How do you want to play?** Solo (vs AI, offline), Host online, or Join a friend.
+2. **Select mode:** Race, Grand Prix or Battle.
+3. **Select your car:** name, car, colour (with its stat bars).
+4. **Select track / cup / arena** and the options below.
+5. **Lobby** (online): the room code and invite link, everyone who's joined with their car, the host's settings, and a START button for the host. Friends who join wait here; anyone can change car from the lobby. People who join after the race has started go straight in.
+
+Joining a friend goes: car → room code → lobby. Invite links (`?room=CODE`) skip to the car screen. Arrow keys move between choices, Esc goes back.
+
+The menu music builds as you go: pads on the first screen, then an arpeggio, bass and hats, the drums, and the full groove with a lead in the lobby (each new part comes in on the next bar).
+
 ## Options
 
 - **AI cars:** none up to 20 (race and battle). Big fields line up three abreast.

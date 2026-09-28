@@ -108,7 +108,7 @@ function refreshMode() {
   for (const b of $('modeSeg').children) b.classList.toggle('on', b.dataset.mode === mode);
   const prev = store.get(`kb-map-${mode}`, MAPS[mode][0][0]);
   $('map').innerHTML = MAPS[mode].map(([id, label]) => `<option value="${id}"${id === prev ? ' selected' : ''}>${label}</option>`).join('');
-  $('mapLabel').textContent = mode === 'gp' ? 'Cup' : 'Map';
+  $('mapLabel').textContent = { race: 'Track', gp: 'Cup', battle: 'Arena' }[mode];
   showPreview();
   $('lapsWrap').classList.toggle('hidden', mode === 'battle');
   $('destructWrap').classList.toggle('hidden', mode !== 'battle');
@@ -137,33 +137,19 @@ function showPreview() {
 }
 $('map').addEventListener('change', showPreview);
 
-for (const b of $('modeSeg').children) {
-  b.onclick = () => {
-    mode = b.dataset.mode;
-    refreshMode();
-  };
-}
-refreshMode();
-
 $('destruct').checked = store.get('kb-destruct', '1') === '1';
-
-const params = new URLSearchParams(location.search);
-if (params.get('room')) {
-  $('code').value = params.get('room').toUpperCase();
-  $('join').focus();
-}
 
 const status = (msg, err = false) => {
   $('menuStatus').textContent = msg;
   $('menuStatus').className = err ? 'err' : '';
 };
 
-const buttons = ['host', 'join', 'practice'].map($);
+const buttons = ['join', 'trackOk', 'lobbyGo'].map($);
 const busy = (b) => buttons.forEach((x) => (x.disabled = b));
 
 function playerInfo() {
-  const name = $('name').value.trim().slice(0, 16) || `Racer${Math.floor(Math.random() * 900 + 100)}`;
-  store.set('kb-name', name);
+  const name = $('name').value.trim().slice(0, 16) || (playerInfo.auto ||= `Racer${Math.floor(Math.random() * 900 + 100)}`);
+  store.set('kb-name', $('name').value.trim().slice(0, 16));
   store.set('kb-color', color);
   store.set('kb-car', car);
   store.set('kb-mode', mode);
@@ -182,7 +168,7 @@ const phoneSetup = () => {
   if (localStorage.getItem('kb-tilt') === '1') requestMotionPermission();
   enterLandscape();
 };
-for (const id of ['host', 'join', 'practice']) $(id).addEventListener('click', phoneSetup, { capture: true });
+for (const id of ['trackOk', 'join', 'lobbyGo']) $(id).addEventListener('click', phoneSetup, { capture: true });
 
 // Music: starts on the first tap/click (browsers block audio before that)
 document.addEventListener('pointerdown', () => sfx.init(), { once: true, capture: true });
@@ -223,20 +209,201 @@ function hostOpts() {
   return { mode, map: gp ? gp[0] : $('map').value, gp, botCount: +$('bots').value, laps: +$('laps').value, destructible: $('destruct').checked, mods };
 }
 
-$('host').onclick = async () => {
-  sfx.init();
-  busy(true);
-  status('Creating room…');
-  const net = new Net();
-  try {
-    const code = await net.hostGame();
-    start(net, code, hostOpts());
-  } catch (e) {
-    console.error(e);
-    status(`Could not create room: ${e.message || e.type || e}`, true);
-    busy(false);
-  }
+// ================= menu screens =================
+// Solo:  start → mode → car → track → (game)
+// Host:  start → mode → car → track → lobby → (game)
+// Join:  start → car → code → lobby → (game)
+// The menu tune gains instruments as you go deeper.
+const LAYERS = {
+  start: ['pad'],
+  mode: ['pad', 'arp'],
+  car: ['pad', 'arp', 'bass', 'hat'],
+  track: ['pad', 'arp', 'bass', 'hat', 'kick', 'clap', 'ohat'],
+  code: ['pad', 'arp', 'bass', 'hat', 'kick', 'clap', 'ohat'],
+  lobby: ['pad', 'arp', 'bass', 'hat', 'kick', 'clap', 'ohat', 'snare', 'stab', 'lead'],
 };
+const TITLES = { race: ['Select track', 'Track'], gp: ['Select cup', 'Cup'], battle: ['Select arena', 'Arena'] };
+let path = null; // 'solo' | 'host' | 'join'
+let screen = 'start';
+const trail = [];
+
+function show(name, push = true) {
+  if (push && screen !== name) trail.push(screen);
+  screen = name;
+  for (const sc of document.querySelectorAll('#menu .screen')) sc.classList.toggle('on', sc.dataset.screen === name);
+  $('back').classList.toggle('hidden', name === 'start');
+  if (name === 'start') {
+    trail.length = 0;
+    closeRoom();
+  }
+  if (name === 'track') {
+    $('trackTitle').textContent = TITLES[mode][0];
+    $('trackOk').textContent = path === 'host' ? 'OK! Open the lobby' : 'OK! Start';
+  }
+  if (name === 'car') $('carOk').textContent = room || guest ? 'OK! Back to the lobby' : 'OK!';
+  sfx.musicLayers(LAYERS[name]);
+  status('');
+  $('menu').scrollTop = 0;
+  const first = document.querySelector('#menu .screen.on .row.on, #menu .screen.on .row, #menu .screen.on .carBtn.on');
+  first?.focus({ preventScroll: true });
+}
+
+$('back').onclick = () => {
+  if (screen === 'lobby' && guest) leaveGuest();
+  const prev = trail.pop();
+  if (prev) show(prev, false);
+};
+
+for (const b of document.querySelectorAll('[data-go]')) {
+  b.onclick = () => {
+    sfx.init();
+    path = b.dataset.go;
+    show(path === 'join' ? 'car' : 'mode');
+  };
+}
+for (const b of $('modeSeg').children) {
+  b.onclick = () => {
+    mode = b.dataset.mode;
+    refreshMode();
+    show('car');
+  };
+}
+refreshMode();
+
+$('carOk').onclick = () => {
+  if (room) return openLobby(); // host changing car from the lobby
+  if (guest) {
+    sendHello(); // guest changing car: tell the host, back to the lobby
+    return show('lobby');
+  }
+  show(path === 'join' ? 'code' : 'track');
+};
+$('trackOk').onclick = () => (path === 'host' ? openLobby() : startSolo());
+$('lobbyCar').onclick = () => show('car');
+
+function startSolo() {
+  sfx.init();
+  const net = new Net();
+  net.startOffline();
+  const o = hostOpts();
+  start(net, null, { ...o, botCount: o.botCount || 3 });
+}
+
+// ---------------- lobby ----------------
+let room = null; // host: { net, code, players: Map(id -> { name, color, car }) }
+let guest = null; // guest: { net, code }
+const thumbs = new Map();
+const thumb = (c, col) => {
+  const k = `${c}|${col}`;
+  if (!thumbs.has(k)) {
+    try {
+      thumbs.set(k, carThumbnail(c, col));
+    } catch {
+      thumbs.set(k, '');
+    }
+  }
+  return thumbs.get(k);
+};
+
+function settingsSummary(o) {
+  const where = o.mode === 'gp' ? MAPS.gp.find(([id]) => id === $('map').value)?.[1].split(' — ')[0] : o.mode === 'battle' ? MAPS.battle.find(([id]) => id === o.map)?.[1].split(' — ')[0] : TRACKS[o.map]?.name;
+  const bits = [
+    { race: '🏁 Race', gp: '🏆 Grand Prix', battle: '💥 Battle' }[o.mode],
+    where,
+    o.mode !== 'battle' && `${o.laps} lap${o.laps > 1 ? 's' : ''}`,
+    `${o.botCount || 'no'} AI`,
+    o.mods.size > 1.5 && '🐘 Giant cars',
+    o.mods.size < 0.8 && '🐭 Tiny cars',
+    o.mods.endless && '♾️ Endless nitro',
+    o.mods.damage && '💥 Wall damage',
+    o.mode === 'battle' && o.destructible && '💣 Destructible',
+  ];
+  return { text: bits.filter(Boolean).join(' · '), bots: o.botCount };
+}
+
+function lobbyState() {
+  const me = playerInfo();
+  return {
+    t: 'lobby',
+    code: room.code,
+    host: room.net.myId,
+    players: [[room.net.myId, me.name, me.color, me.car], ...[...room.players].map(([id, p]) => [id, p.name, p.color, p.car])],
+    settings: settingsSummary(hostOpts()),
+  };
+}
+
+function renderLobby(m, isHost) {
+  const myId = isHost ? room.net.myId : guest?.net.myId;
+  const link = `${location.origin}${location.pathname}?room=${m.code}`;
+  $('lobbyInfo').innerHTML = `<div class="roomCode"><small>ROOM CODE</small><b>${esc(m.code)}</b>${isHost ? '<button id="copyRoom" class="ghost">📋 Copy invite link</button>' : ''}</div><p class="settings">${esc(m.settings.text)}</p>`;
+  if (isHost) $('copyRoom').onclick = () => navigator.clipboard?.writeText(link).then(() => status('Invite link copied!'), () => status(link));
+  const cards = m.players.map(([id, name, col, c]) => {
+    const tags = [id === m.host && 'HOST', id === myId && 'YOU'].filter(Boolean).map((t) => `<em>${t}</em>`).join('');
+    return `<div class="pCard${id === myId ? ' me' : ''}"><img alt="" src="${thumb(CARS[c] ? c : 'hyper', col)}" /><span class="dot" style="background:${esc(col)}"></span><b>${esc(name)}</b><small>${esc(CARS[c]?.name || '')}</small>${tags}</div>`;
+  });
+  if (m.settings.bots) cards.push(`<div class="pCard ai"><i>🤖</i><b>+${m.settings.bots} AI</b><small>computer drivers</small></div>`);
+  $('lobbyPlayers').innerHTML = cards.join('');
+  $('lobbyGo').classList.toggle('hidden', !isHost);
+  $('lobbyWait').textContent = isHost ? `Share the code with your friends, then press START. ${m.players.length} player${m.players.length > 1 ? 's' : ''} in the room.` : 'Waiting for the host to start…';
+}
+const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+
+async function openLobby() {
+  if (!room) {
+    sfx.init();
+    busy(true);
+    status('Creating room…');
+    const net = new Net();
+    try {
+      const code = await net.hostGame();
+      room = { net, code, players: new Map() };
+    } catch (e) {
+      console.error(e);
+      status(`Could not create room: ${e.message || e.type || e}`, true);
+      busy(false);
+      return;
+    }
+    busy(false);
+    // Until the race starts, the menu answers people joining
+    room.net.on('msg', (m, from) => {
+      if (m.t !== 'hello' || !room) return;
+      room.players.set(from, { name: String(m.name || 'Racer').slice(0, 16), color: m.color, car: CARS[m.car] ? m.car : 'hyper' });
+      broadcastLobby();
+    });
+    room.net.on('leave', (id) => {
+      room?.players.delete(id);
+      if (room) broadcastLobby();
+    });
+  }
+  if (screen !== 'lobby') show('lobby');
+  broadcastLobby();
+}
+function broadcastLobby() {
+  const m = lobbyState();
+  room.net.send(m);
+  renderLobby(m, true);
+}
+function closeRoom() {
+  room?.net.destroy();
+  room = null;
+}
+
+$('lobbyGo').onclick = () => {
+  if (!room) return;
+  const { net, code } = room;
+  room = null;
+  net.send({ t: 'lstart' }); // everyone in the lobby says hello to the game and gets pulled in
+  start(net, code, hostOpts());
+};
+
+function sendHello() {
+  const { name, color: col, car: c } = playerInfo();
+  guest?.net.send({ t: 'hello', name, color: col, car: c });
+}
+function leaveGuest() {
+  guest?.net.destroy();
+  guest = null;
+}
 
 $('join').onclick = async () => {
   const code = $('code').value.trim().toUpperCase();
@@ -250,34 +417,72 @@ $('join').onclick = async () => {
   const net = new Net();
   try {
     await net.joinGame(code);
-    status('Connected! Getting the room info…');
-    // The host tells us which mode and map the room is using
-    const welcome = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('The host did not respond.')), 10000);
-      net.on('msg', (m) => {
-        if (m.t === 'welcome') {
-          clearTimeout(timer);
-          resolve(m);
-        }
-      });
-      const { name, color, car } = playerInfo();
-      net.send({ t: 'hello', name, color, car });
-    });
-    start(net, code, { mode: welcome.mode, map: welcome.map, laps: welcome.laps, mods: welcome.mods, welcome });
   } catch (e) {
     console.error(e);
     net.destroy();
     status(e.message || 'Could not connect.', true);
     busy(false);
+    return;
   }
+  guest = { net, code };
+  status('Connected! Getting the room info…');
+  const timer = setTimeout(() => {
+    if (guest?.net === net && screen === 'code') {
+      leaveGuest();
+      status('The host did not respond.', true);
+      busy(false);
+    }
+  }, 10000);
+  net.on('closed', () => {
+    if (guest?.net !== net) return;
+    guest = null;
+    show('code', false);
+    status('The host closed the room.', true);
+  });
+  net.on('msg', (m) => {
+    if (guest?.net !== net) return;
+    if (m.t === 'lobby') {
+      // Host is still in the menu: wait in the lobby
+      clearTimeout(timer);
+      busy(false);
+      if (screen === 'code') show('lobby');
+      renderLobby(m, false);
+    } else if (m.t === 'lstart') {
+      status('Starting…');
+      sendHello(); // the game itself answers with a welcome
+    } else if (m.t === 'welcome') {
+      // Host is in a game (just started, or we joined late): jump in
+      clearTimeout(timer);
+      guest = null;
+      busy(false);
+      start(net, code, { mode: m.mode, map: m.map, laps: m.laps, mods: m.mods, welcome: m });
+    }
+  });
+  sendHello();
 };
-
 $('code').addEventListener('keydown', (e) => e.key === 'Enter' && $('join').click());
 
-$('practice').onclick = () => {
-  sfx.init();
-  const net = new Net();
-  net.startOffline();
-  const o = hostOpts();
-  start(net, null, { ...o, botCount: o.botCount || 3 });
-};
+// Keyboard: arrows move between choices, Esc goes back
+document.addEventListener('keydown', (e) => {
+  if ($('menu').classList.contains('hidden')) return;
+  const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
+  if (e.key === 'Escape' || (e.key === 'Backspace' && !typing)) {
+    if (!$('back').classList.contains('hidden')) $('back').click();
+    return;
+  }
+  if (typing || !['ArrowDown', 'ArrowUp'].includes(e.key)) return;
+  const rows = [...document.querySelectorAll('#menu .screen.on .row')];
+  if (!rows.length) return;
+  e.preventDefault();
+  const i = rows.indexOf(document.activeElement);
+  rows[(i + (e.key === 'ArrowDown' ? 1 : rows.length - 1)) % rows.length].focus();
+});
+
+// Invite links (?room=CODE) go straight into joining
+const params = new URLSearchParams(location.search);
+if (params.get('room')) {
+  $('code').value = params.get('room').toUpperCase();
+  path = 'join';
+  trail.push('start');
+  show('car', false);
+} else show('start', false);

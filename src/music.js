@@ -12,10 +12,12 @@ const MODES = {
 
 // x = hit, . = rest. 16 steps per bar.
 export const TRACKS = {
+  // The menu tune is built up a layer at a time as you go through the menu
   menu: {
-    bpm: 96, root: 50, mode: 'major', prog: [0, 4, 5, 3],
-    kick: 'x.......x.......', snare: '....x.......x...', hat: '..x...x...x...x.',
-    bass: 'R...R...R.R.....', arp: 'up', arpWave: 'triangle', pad: 'sine', lead: false, bright: 0.5,
+    bpm: 118, root: 50, mode: 'major', prog: [0, 5, 3, 4],
+    kick: 'x...x...x...x...', snare: '....x.......x...', clap: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', ohat: '..x...x...x...x.',
+    bass: '..R...R...R.o.R.', stab: '..x...x...x..x..', stabWave: 'triangle',
+    arp: 'up', arpWave: 'triangle', pad: 'sawtooth', lead: 'triangle', pump: true, swing: 0.06, bright: 0.7,
   },
   toy: {
     bpm: 132, root: 52, mode: 'major', prog: [0, 5, 3, 4],
@@ -196,6 +198,7 @@ export class Music {
     this.step = 0;
     this.bar = 0;
     this.nextTime = this.ctx.currentTime + 0.1;
+    this.layers = this.pendingLayers = null;
     this.rng = seeded(t.seed ?? id.length * 977 + t.bpm);
     this.motif = this.makeMotif();
     const g = this.out.gain, now = this.ctx.currentTime;
@@ -203,6 +206,12 @@ export class Music {
     g.setValueAtTime(0, now);
     g.linearRampToValueAtTime(this.enabled === false ? 0 : this.volume, now + 1.5);
     if (!this.timer) this.timer = setInterval(() => this.schedule(), 25);
+  }
+
+  /** Only play these parts (null = normal song form). Changes land on the next bar, in time. */
+  setLayers(parts) {
+    this.pendingLayers = parts ? [...parts] : null;
+    if (!this.track) this.layers = this.pendingLayers;
   }
 
   setEnabled(on) {
@@ -256,7 +265,8 @@ export class Music {
       const s = this.step % 16;
       const bar = Math.floor(this.step / 16);
       const sec = this.section(bar);
-      const has = (p) => sec.parts.includes(p);
+      if (s === 0 && this.pendingLayers !== undefined) this.layers = this.pendingLayers;
+      const has = (p) => (this.layers ? this.layers.includes(p) : sec.parts.includes(p));
       const time = this.nextTime + (s % 2 ? (t.swing || 0) * spb * 2 : 0); // swing the off 16ths
       const chord = this.chord(bar);
       if (has('kick') && t.kick[s] === 'x') {

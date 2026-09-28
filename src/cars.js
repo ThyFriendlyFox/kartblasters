@@ -9,12 +9,12 @@ import { buildRailBuggy, buildWedge, buildGoat, buildArmoured } from './cars3.js
  * tightly the car can turn (its maximum turn rate).
  */
 export const CARS = {
-  hyper: { name: 'Hyper', desc: 'Black 80s wedge supercar with a turbo: balanced', speed: 1.0, accel: 1.0, grip: 1.0, handling: 1.0, boost: 1.0, hp: 100 },
+  hyper: { name: 'Hyper', desc: '80s wedge supercar with a turbo: balanced', speed: 1.0, accel: 1.0, grip: 1.0, handling: 1.0, boost: 1.0, hp: 100 },
   muscle: { name: 'Muscle', desc: '60s muscle coupe: top speed, heavy steering', speed: 1.07, accel: 0.95, grip: 0.9, handling: 0.92, boost: 1.1, hp: 110 },
   formula: { name: 'Formula', desc: 'Stadium open-wheeler: grippy and quick, but fragile', speed: 1.04, accel: 1.05, grip: 1.15, handling: 1.08, boost: 0.95, hp: 85 },
   buggy: { name: 'Buggy', desc: 'Rail dune buggy with a whip flag: punchy, great grip', speed: 0.95, accel: 1.15, grip: 1.1, handling: 1.1, boost: 0.9, hp: 100 },
   truck: { name: 'Brute', desc: 'Armoured 4x4: slow, but takes a beating', speed: 0.92, accel: 0.88, grip: 0.95, handling: 0.9, boost: 0.85, hp: 135 },
-  longtail: { name: 'Longtail 17', desc: 'Gold 70s endurance racer, flat-12', speed: 1.09, accel: 0.97, grip: 0.97, handling: 0.96, boost: 1.0, hp: 90 },
+  longtail: { name: 'Longtail 17', desc: '70s long-tail endurance racer, flat-12', speed: 1.09, accel: 0.97, grip: 0.97, handling: 0.96, boost: 1.0, hp: 90 },
   sixbysix: { name: 'Rockcrawler', desc: 'Six-wheeled off-road pickup: grippy tank', speed: 0.93, accel: 0.92, grip: 1.12, handling: 0.93, boost: 0.88, hp: 145 },
   shark: { name: 'Sharkbite', desc: 'Shark hot rod with a blown V8', speed: 1.02, accel: 1.1, grip: 0.97, handling: 0.98, boost: 1.2, hp: 95 },
   sixpack: { name: 'Six Pack', desc: 'Six-wheeled hatch, engine through the hood', speed: 1.03, accel: 1.02, grip: 1.08, handling: 1.04, boost: 1.1, hp: 105 },

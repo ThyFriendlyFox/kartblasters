@@ -14,100 +14,137 @@
   <body>
     <div id="game"></div>
 
-    <!-- Main menu -->
-    <div id="menu" class="overlay">
-      <div class="panel">
-        <h1>KART<span>BLASTERS</span></h1>
-        <p class="tag">Peer-to-peer car battles and stunt-track racing. Pick a car, pick a map, invite a friend.</p>
-
-        <label>Driver name <input id="name" maxlength="16" placeholder="Speedy" autocomplete="off" /></label>
-        <div class="label">Your car</div>
-        <div id="carPick"></div>
-        <div id="carStats" class="carStats"></div>
-        <div id="colors"></div>
-
-        <div class="cols">
-          <div class="card">
-            <h3>Host a game</h3>
-            <div class="seg" id="modeSeg">
-              <button data-mode="race" class="on">🏁 Race</button>
-              <button data-mode="gp">🏆 Grand Prix</button>
-              <button data-mode="battle">💥 Battle</button>
-            </div>
-            <label><span id="mapLabel">Map</span> <select id="map"></select></label>
-            <div id="mapPreview" class="mapPreview"><div class="shot"></div><p class="facts"></p></div>
-            <div class="row2">
-              <label>AI cars
-                <select id="bots">
-                  <option value="0">None</option>
-                  <option value="2">2</option>
-                  <option value="3" selected>3</option>
-                  <option value="5">5</option>
-                  <option value="7">7</option>
-                  <option value="10">10</option>
-                  <option value="15">15</option>
-                  <option value="20">20 🤯</option>
-                </select>
-              </label>
-              <label id="lapsWrap">Laps
-                <select id="laps">
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3" selected>3</option>
-                  <option value="5">5</option>
-                  <option value="10">10</option>
-                  <option value="20">20 🤯</option>
-                </select>
-              </label>
-            </div>
-            <div class="row2">
-              <label>Car size
-                <select id="carSize">
-                  <option value="0.55">🐭 Tiny</option>
-                  <option value="1" selected>Normal</option>
-                  <option value="1.8">🐘 Giant</option>
-                </select>
-              </label>
-              <label class="check"><input type="checkbox" id="endless" /> ♾️ Endless nitro</label>
-            </div>
-            <label class="check"><input type="checkbox" id="wallDamage" /> 💥 Wall damage <small>hitting walls hurts your car: the harder the hit, the more damage</small></label>
-            <label id="destructWrap" class="check hidden"><input type="checkbox" id="destruct" checked /> 💣 Destructible terrain <small>rockets dig craters, walls break apart</small></label>
-            <button id="host" class="primary">Create room</button>
-          </div>
-          <div class="card joinCard">
-            <h3>Join a friend</h3>
-            <div class="joinRow">
-              <input id="code" maxlength="5" placeholder="ABCDE" aria-label="Room code" autocomplete="off" />
-              <button id="join" class="primary">Join room</button>
-            </div>
-            <p class="hintsm">The host picks the mode, map and options. You bring your own car.</p>
-          </div>
-        </div>
-        <button id="practice" class="ghost">Practice offline vs AI</button>
-        <label class="check musicRow"><input type="checkbox" id="musicToggleMenu" checked /> 🎵 Music</label>
-        <div id="menuStatus"></div>
-
-        <div class="controls" id="ctlRace">
-          <div><kbd>W</kbd><kbd>S</kbd> gas / brake</div>
-          <div><kbd>A</kbd><kbd>D</kbd> steer</div>
-          <div><kbd>Space</kbd> drift (charges nitro)</div>
-          <div><kbd>Shift</kbd> nitro</div>
-          <div><kbd>A</kbd><kbd>D</kbd>/<kbd>Space</kbd> in air: tricks</div>
-          <div><kbd>R</kbd> recenter</div>
-          <div><kbd>Esc</kbd> pause · <kbd>N</kbd> music</div>
-        </div>
-        <div class="controls hidden" id="ctlBattle">
-          <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive</div>
-          <div><kbd>Mouse</kbd> aim turret</div>
-          <div><kbd>Left click</kbd> fire</div>
-          <div><kbd>1</kbd>…<kbd>0</kbd> / wheel: weapons</div>
-          <div><kbd>Right click</kbd>/<kbd>E</kbd> rocket</div>
-          <div><kbd>Shift</kbd> boost</div>
-          <div><kbd>Space</kbd> drift</div>
-          <div><kbd>Tab</kbd> scores</div>
-          <div><kbd>M</kbd> mute · <kbd>N</kbd> music</div>
-        </div>
+    <!-- Main menu: a run of full-screen steps, like a console kart game -->
+    <div id="menu" class="overlay dd">
+      <div class="ddTop">
+        <button id="back" class="ddBack hidden">◀ Back</button>
+        <div class="brand">KART<span>BLASTERS</span></div>
+        <label class="check musicRow"><input type="checkbox" id="musicToggleMenu" checked /> 🎵</label>
       </div>
+
+      <section class="screen on" data-screen="start">
+        <h2 class="banner">How do you want to play?</h2>
+        <div class="rows">
+          <button class="row" data-go="solo"><span class="ring"></span><b>Solo</b><small>Race or battle the AI, no internet needed</small><i>🏎️</i></button>
+          <button class="row" data-go="host"><span class="ring"></span><b>Host online</b><small>Make a room and invite your friends</small><i>🏎️🏎️</i></button>
+          <button class="row" data-go="join"><span class="ring"></span><b>Join a friend</b><small>Got a room code? Hop in</small><i>🤝</i></button>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="mode">
+        <h2 class="banner">Select mode</h2>
+        <div class="rows" id="modeSeg">
+          <button class="row" data-mode="race"><span class="ring"></span><b>Race</b><small>One track, stunts and shortcuts</small><i>🏁</i></button>
+          <button class="row" data-mode="gp"><span class="ring"></span><b>Grand Prix</b><small>A cup of tracks raced for points</small><i>🏆</i></button>
+          <button class="row" data-mode="battle"><span class="ring"></span><b>Battle</b><small>Arena combat with turrets and rockets</small><i>💥</i></button>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="car">
+        <h2 class="banner">Select your car</h2>
+        <div class="ddPanel">
+          <label>Driver name <input id="name" maxlength="16" placeholder="Speedy" autocomplete="off" /></label>
+          <div id="carPick"></div>
+          <div id="carStats" class="carStats"></div>
+          <div id="colors"></div>
+          <button id="carOk" class="ok">OK!</button>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="track">
+        <h2 class="banner" id="trackTitle">Select track</h2>
+        <div class="ddPanel">
+          <label><span id="mapLabel">Track</span> <select id="map"></select></label>
+          <div id="mapPreview" class="mapPreview"><div class="shot"></div><p class="facts"></p></div>
+          <div class="row2">
+            <label>AI cars
+              <select id="bots">
+                <option value="0">None</option>
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="5">5</option>
+                <option value="7">7</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+                <option value="20">20 🤯</option>
+              </select>
+            </label>
+            <label id="lapsWrap">Laps
+              <select id="laps">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="20">20 🤯</option>
+              </select>
+            </label>
+          </div>
+          <div class="row2">
+            <label>Car size
+              <select id="carSize">
+                <option value="0.55">🐭 Tiny</option>
+                <option value="1" selected>Normal</option>
+                <option value="1.8">🐘 Giant</option>
+              </select>
+            </label>
+            <label class="check"><input type="checkbox" id="endless" /> ♾️ Endless nitro</label>
+          </div>
+          <label class="check"><input type="checkbox" id="wallDamage" /> 💥 Wall damage <small>hitting walls hurts your car: the harder the hit, the more damage</small></label>
+          <label id="destructWrap" class="check hidden"><input type="checkbox" id="destruct" checked /> 💣 Destructible terrain <small>rockets dig craters, walls break apart</small></label>
+          <button id="trackOk" class="ok">OK!</button>
+          <details class="ctlHelp">
+            <summary>Controls</summary>
+            <div class="controls" id="ctlRace">
+              <div><kbd>W</kbd><kbd>S</kbd> gas / brake</div>
+              <div><kbd>A</kbd><kbd>D</kbd> steer</div>
+              <div><kbd>Space</kbd> drift (charges nitro)</div>
+              <div><kbd>Shift</kbd> nitro</div>
+              <div><kbd>A</kbd><kbd>D</kbd>/<kbd>Space</kbd> in air: tricks</div>
+              <div><kbd>R</kbd> recenter</div>
+              <div><kbd>Esc</kbd> pause · <kbd>N</kbd> music</div>
+            </div>
+            <div class="controls hidden" id="ctlBattle">
+              <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive</div>
+              <div><kbd>Mouse</kbd> aim turret</div>
+              <div><kbd>Left click</kbd> fire</div>
+              <div><kbd>1</kbd>…<kbd>0</kbd> / wheel: weapons</div>
+              <div><kbd>Right click</kbd>/<kbd>E</kbd> rocket</div>
+              <div><kbd>Shift</kbd> boost</div>
+              <div><kbd>Space</kbd> drift</div>
+              <div><kbd>Tab</kbd> scores</div>
+              <div><kbd>M</kbd> mute · <kbd>N</kbd> music</div>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="code">
+        <h2 class="banner">Join a friend</h2>
+        <div class="ddPanel">
+          <label>Room code</label>
+          <div class="joinRow">
+            <input id="code" maxlength="5" placeholder="ABCDE" aria-label="Room code" autocomplete="off" />
+            <button id="join" class="primary">Join!</button>
+          </div>
+          <p class="hintsm">The host picks the mode, track and options. You bring your own car.</p>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="lobby">
+        <h2 class="banner">Lobby</h2>
+        <div class="ddPanel">
+          <div id="lobbyInfo"></div>
+          <div id="lobbyPlayers"></div>
+          <div class="lobbyBtns">
+            <button id="lobbyCar" class="ghost">🚗 Change car</button>
+            <button id="lobbyGo" class="ok">START!</button>
+          </div>
+          <p id="lobbyWait" class="hintsm"></p>
+        </div>
+      </section>
+
+      <div id="menuStatus"></div>
     </div>
 
     <!-- In-game HUD -->

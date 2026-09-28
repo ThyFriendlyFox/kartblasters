@@ -55,6 +55,7 @@ export class Sfx {
     this.music = new Music(ctx, this.master, this.noise);
     this.music.setEnabled(this.musicOn);
     this.music.play(this.wantTrack);
+    if (this.wantLayers) this.music.setLayers(this.wantLayers);
   }
 
   /** Choose the engine that matches a car. */
@@ -65,7 +66,14 @@ export class Sfx {
 
   playMusic(name) {
     this.wantTrack = name;
+    this.wantLayers = null;
     this.music?.play(name);
+  }
+
+  /** Menu build-up: only these instrument parts play (null = the song's own arrangement). */
+  musicLayers(parts) {
+    this.wantLayers = parts;
+    this.music?.setLayers(parts);
   }
 
   setMusic(on) {
