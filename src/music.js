@@ -19,7 +19,7 @@ export const TRACKS = {
     bpm: 126, root: 45, mode: 'minor', prog: [0, 5, 3, 6],
     kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.xxx.xxx.xxx.xx', ohat: '..x...x...x...x.',
     bass: 'R.RR.RoRR.RR.RoR', arp: 'updown', arpWave: 'sawtooth', pad: 'sawtooth', lead: 'sawtooth',
-    acid: '0..0o.3.0..5.3o.', riff: 'X.......X...x.x.', echo: 0.4, bright: 0.6,
+    acid: '0..0o.3.0..5.3o.', riff: 'X.......X...x.x.', echo: 0.4, bright: 0.6, kit: 'hard',
   },
   // Neon Junction keeps its signature tune
   neon: {
@@ -95,6 +95,8 @@ export function randomSong(style = pick(Math.random, STYLE_IDS), seed = Math.flo
     t[k] = typeof v[0] === 'number' && v.length === 2 ? (Number.isInteger(v[0]) ? range(rng, v[0], v[1]) : v[0] + rng() * (v[1] - v[0])) : pick(rng, v);
   }
   t.prog = pick(rng, PROGS[t.mode]);
+  t.form = style;
+  t.kit = 'hard'; // punchier drums and a reese bass
   t.label = `${pick(rng, st.label)} · ${NOTE_NAMES[t.root % 12]} ${t.mode} · ${t.bpm} BPM`;
   return t;
 }
@@ -108,7 +110,36 @@ export function musicFor(mapId) {
   return randomSong();
 }
 
-// Song form: bars per section and which parts play
+// Each style has its own arrangement, so it announces itself from the first bar
+const ALL = ['pad', 'arp', 'hat', 'kick', 'snare', 'bass', 'lead', 'ohat', 'clap', 'stab', 'riff', 'acid'];
+const FORMS = {
+  // Guitar and drums straight away, like a rock intro
+  beasts: [
+    { bars: 4, parts: ['riff', 'kick', 'snare', 'hat'] },
+    { bars: 8, parts: ['riff', 'kick', 'snare', 'hat', 'ohat', 'bass'] },
+    { bars: 8, parts: ['riff', 'kick', 'snare', 'hat', 'ohat', 'bass', 'lead', 'pad'] },
+    { bars: 4, parts: ['pad', 'bass', 'hat', 'arp'] },
+    { bars: 8, parts: ALL },
+  ],
+  // The acid line opens and never leaves
+  space: [
+    { bars: 4, parts: ['acid', 'pad', 'hat'] },
+    { bars: 8, parts: ['acid', 'kick', 'clap', 'snare', 'hat', 'ohat', 'bass', 'pad'] },
+    { bars: 8, parts: ['acid', 'kick', 'clap', 'snare', 'hat', 'ohat', 'bass', 'pad', 'arp', 'lead'] },
+    { bars: 4, parts: ['acid', 'pad', 'arp'] },
+    { bars: 8, parts: ALL },
+  ],
+  // Echoing arps and rolling bass from the start, broken beats join
+  vapor: [
+    { bars: 4, parts: ['arp', 'bass', 'hat', 'pad'] },
+    { bars: 8, parts: ['arp', 'bass', 'hat', 'kick', 'snare', 'ohat', 'pad'] },
+    { bars: 8, parts: ['arp', 'bass', 'hat', 'kick', 'snare', 'ohat', 'pad', 'lead', 'riff', 'acid'] },
+    { bars: 4, parts: ['arp', 'pad'] },
+    { bars: 8, parts: ALL },
+  ],
+};
+
+// Default song form (Neon Junction): bars per section and which parts play
 const FORM = [
   { bars: 4, parts: ['pad', 'arp', 'hat', 'acid'] },
   { bars: 8, parts: ['pad', 'arp', 'hat', 'kick', 'snare', 'bass', 'ohat', 'clap', 'acid'] },
@@ -221,15 +252,16 @@ export class Music {
   }
 
   section(bar) {
-    const total = FORM.reduce((a, f) => a + f.bars, 0);
+    const form = FORMS[this.track.form] || FORM;
+    const total = form.reduce((a, f) => a + f.bars, 0);
     let b = bar % total;
     // After the first pass, skip the intro
-    if (bar >= total) b = FORM[0].bars + ((bar - total) % (total - FORM[0].bars));
-    for (const f of FORM) {
+    if (bar >= total) b = form[0].bars + ((bar - total) % (total - form[0].bars));
+    for (const f of form) {
       if (b < f.bars) return f;
       b -= f.bars;
     }
-    return FORM[1];
+    return form[1];
   }
 
   schedule() {
@@ -359,6 +391,19 @@ export class Music {
 
   kick(time) {
     const ctx = this.ctx;
+    if (this.track.kit === 'hard') {
+      // Punchy: a pitched thump, a click on top, a little drive
+      const o = ctx.createOscillator(), g = ctx.createGain(), sh = ctx.createWaveShaper();
+      o.frequency.setValueAtTime(190, time);
+      o.frequency.exponentialRampToValueAtTime(48, time + 0.09);
+      sh.curve = this.fuzz;
+      this.env(g, time, 0.002, 0.55, 0.3);
+      o.connect(sh).connect(g).connect(this.out);
+      o.start(time);
+      o.stop(time + 0.35);
+      this.noiseHit(time, 'highpass', 3500, 0.012, 0.35);
+      return;
+    }
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.frequency.setValueAtTime(150, time);
     o.frequency.exponentialRampToValueAtTime(42, time + 0.12);
@@ -423,6 +468,20 @@ export class Music {
   }
 
   snare(time) {
+    if (this.track.kit === 'hard') {
+      // Snappy: bright crack, body and a tail that catches the echo
+      this.noiseHit(time, 'bandpass', 2200, 0.22, 0.6, 0.6);
+      this.noiseHit(time, 'highpass', 6000, 0.07, 0.35);
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.frequency.setValueAtTime(240, time);
+      o.frequency.exponentialRampToValueAtTime(160, time + 0.06);
+      this.env(g, time, 0.002, 0.3, 0.09);
+      o.connect(g).connect(this.out);
+      g.connect(this.echoIn);
+      o.start(time);
+      o.stop(time + 0.15);
+      return;
+    }
     this.noiseHit(time, 'bandpass', 1900, 0.18, 0.5, 0.7);
     const o = this.ctx.createOscillator(), g = this.ctx.createGain();
     o.frequency.setValueAtTime(220, time);
@@ -439,6 +498,27 @@ export class Music {
 
   bass(time, note, dur) {
     const ctx = this.ctx;
+    if (this.track.kit === 'hard') {
+      // Reese: two detuned saws and a sub, growled through a little drive
+      const f = ctx.createBiquadFilter(), sh = ctx.createWaveShaper(), g = ctx.createGain();
+      f.type = 'lowpass';
+      f.Q.value = 4;
+      f.frequency.setValueAtTime(420 + 700 * this.track.bright, time);
+      f.frequency.exponentialRampToValueAtTime(200, time + dur);
+      sh.curve = this.fuzz;
+      this.env(g, time, 0.004, 0.16, dur);
+      f.connect(sh).connect(g).connect(this.out);
+      for (const [type, mul, det] of [['sawtooth', 1, -14], ['sawtooth', 1, 14], ['sine', 0.5, 0]]) {
+        const o = ctx.createOscillator();
+        o.type = type;
+        o.frequency.value = mtof(note) * mul;
+        o.detune.value = det;
+        o.connect(f);
+        o.start(time);
+        o.stop(time + dur + 0.05);
+      }
+      return;
+    }
     const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
     o.type = 'sawtooth';
     o.frequency.value = mtof(note);
