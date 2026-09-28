@@ -6,7 +6,8 @@ import { Sfx } from './audio.js';
 import { isTouchDevice, requestMotionPermission, enterLandscape, MobileInput } from './mobile.js';
 import { CARS, CAR_IDS, carImage, preloadCarImages, statBarsHTML } from './cars.js';
 import { TRACKS, TRACK_IDS } from './trackdefs.js';
-import { mapPreview } from './preview.js';
+import { Showroom } from './showroom.js';
+import MAP_FACTS from './mapfacts.json';
 import { RULES, RULE_IDS, TOURNAMENTS, randomTournament } from './modes.js';
 
 // Initialize Vercel Analytics
@@ -64,13 +65,16 @@ if (!CARS[car]) car = 'hyper';
 let mode = ['race', 'gp', 'battle', 'tourney'].includes(store.get('kb-mode', 'race')) ? store.get('kb-mode', 'race') : 'race';
 $('name').value = store.get('kb-name', '');
 
-// ---- car picker (thumbnails are re-rendered in the chosen color)
+// ---- car picker: a showroom turntable with a carousel of cars underneath
 const carPick = $('carPick');
 const carBtns = {};
+const showroom = new Showroom($('showroomCanvas'));
+$('srCount').textContent = `${CAR_IDS.length} CARS`;
 for (const id of CAR_IDS) {
   const b = document.createElement('button');
   b.className = 'carBtn';
-  b.innerHTML = `<img alt="" /><span>${CARS[id].name}</span><small>${CARS[id].desc}</small>`;
+  b.innerHTML = `<img alt="" /><span>${CARS[id].name}</span>`;
+  b.title = CARS[id].desc;
   b.onclick = () => {
     car = id;
     refreshCars();
@@ -79,7 +83,7 @@ for (const id of CAR_IDS) {
   carBtns[id] = b;
 }
 function refreshCars(redraw = false) {
-  $('carStats').innerHTML = `<b>${CARS[car].name}</b>${statBarsHTML(car)}`;
+  $('carStats').innerHTML = `<h3 class="srName">${CARS[car].name}</h3><p class="srDesc">${CARS[car].desc}</p>${statBarsHTML(car)}`;
   for (const id of CAR_IDS) {
     carBtns[id].classList.toggle('on', id === car);
     if (redraw) {
@@ -90,7 +94,15 @@ function refreshCars(redraw = false) {
       }
     }
   }
+  carBtns[car].scrollIntoView?.({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  showroom.show(car, color);
 }
+const stepCar = (d) => {
+  car = CAR_IDS[(CAR_IDS.indexOf(car) + d + CAR_IDS.length) % CAR_IDS.length];
+  refreshCars();
+};
+$('carPrev').onclick = () => stepCar(-1);
+$('carNext').onclick = () => stepCar(1);
 
 const swatches = $('colors');
 for (const c of COLORS) {
@@ -121,6 +133,8 @@ function refreshMode() {
   $('ruleWrap').classList.toggle('hidden', mode !== 'battle');
   $('ruleDesc').classList.toggle('hidden', mode !== 'battle');
   if (cups) renderCups();
+  renderMapGrid();
+  renderRules();
   showPreview();
   $('lapsWrap').classList.toggle('hidden', fight);
   $('destructWrap').classList.toggle('hidden', !fight);
@@ -150,41 +164,82 @@ function renderCups() {
     box.appendChild(b);
   }
 }
-// Aerial shot of the selected map, rendered from the real map on demand
+// Map grid: prerendered aerial shots (see scripts/render-map-thumbs.mjs)
+const shot = (kind, id) => `/maps/${kind}-${id}.webp`;
+const mapName = (label) => label.split(' — ')[0];
+function renderMapGrid() {
+  const grid = $('mapGrid');
+  grid.innerHTML = '';
+  if (mode !== 'race' && mode !== 'battle') return;
+  for (const [id, label] of MAPS[mode]) {
+    const b = document.createElement('button');
+    b.className = 'mapTile' + ($('map').value === id ? ' on' : '');
+    b.dataset.id = id;
+    b.innerHTML = `<img alt="" loading="lazy" src="${shot(mode, id)}" /><b>${mapName(label)}</b>`;
+    b.title = label;
+    b.onclick = () => {
+      $('map').value = id;
+      $('map').dispatchEvent(new Event('change'));
+    };
+    grid.appendChild(b);
+  }
+}
+// What the selected map (or cup / tournament) is, under the grid
 function showPreview() {
   if (mode === 'gp' && $('map').value === 'random') randomCup = shuffle(TRACK_IDS).slice(0, 4);
   if (mode === 'tourney' && $('map').value === 'random') randomTour = randomTournament();
-  const cup = mode === 'gp' ? cupMaps($('map').value) : null;
-  const tour = mode === 'tourney' ? tourMatches($('map').value) : null;
+  for (const t of $('mapGrid').children) t.classList.toggle('on', t.dataset.id === $('map').value);
   if (mode === 'battle') $('ruleDesc').textContent = `${RULES[$('rule').value]?.icon} ${RULES[$('rule').value]?.desc}`;
-  // A cup shows its first track, a tournament its first arena
-  const wrap = $('mapPreview'), id = cup ? cup[0] : tour ? tour[0][1] : $('map').value, key = `${mode}:${$('map').value}:${id}`;
-  wrap.dataset.key = key;
-  wrap.classList.add('loading');
-  mapPreview(mode === 'gp' ? 'race' : mode === 'tourney' ? 'battle' : mode, id)
-    .then(({ url, facts }) => {
-      if (wrap.dataset.key !== key) return;
-      wrap.querySelector('.shot').style.backgroundImage = `url(${url})`;
-      const arena = (m) => MAPS.battle.find(([a]) => a === m)?.[1].split(' — ')[0] || m;
-      wrap.querySelector('.facts').textContent = cup
-        ? `${cup.length} races: ${cup.map((m) => TRACKS[m].name).join(' → ')}`
-        : tour
-          ? `${tour.length} matches: ${tour.map(([r, m]) => `${RULES[r].icon} ${RULES[r].name} (${arena(m)})`).join(' → ')}`
-          : facts.join(' · ');
-      wrap.classList.remove('loading');
-    })
-    .catch((e) => {
-      console.warn('map preview failed', e);
-      if (wrap.dataset.key === key) wrap.classList.add('hidden');
-    });
+  const facts = $('mapPreview').querySelector('.facts');
+  const arena = (m) => mapName(MAPS.battle.find(([a]) => a === m)?.[1] || m);
+  const strip = (items) => `<div class="cupStrip">${items.map(([kind, id, cap]) => `<figure><img alt="" src="${shot(kind, id)}" /><figcaption>${cap}</figcaption></figure>`).join('')}</div>`;
+  if (mode === 'gp') {
+    const cup = cupMaps($('map').value);
+    facts.innerHTML = strip(cup.map((m, i) => ['race', m, `${i + 1}. ${TRACKS[m].name}`]));
+  } else if (mode === 'tourney') {
+    const tour = tourMatches($('map').value);
+    facts.innerHTML = strip(tour.map(([r, m], i) => ['battle', m, `${i + 1}. ${RULES[r].icon} ${RULES[r].name} · ${arena(m)}`]));
+  } else {
+    const id = $('map').value;
+    const label = MAPS[mode].find(([m]) => m === id)?.[1] || '';
+    const [name, desc] = label.split(' — ');
+    const f = MAP_FACTS[`${mode}-${id}`] || [];
+    facts.innerHTML = `<b>${name || ''}</b>${desc ? ` · ${desc}` : ''}${f.length ? `<br><small>${f.join(' · ')}</small>` : ''}`;
+  }
 }
 $('map').addEventListener('change', showPreview);
 $('rule').innerHTML = RULE_IDS.map((id) => `<option value="${id}">${RULES[id].icon} ${RULES[id].name}</option>`).join('');
 $('rule').value = RULES[store.get('kb-rule', 'ffa')] ? store.get('kb-rule', 'ffa') : 'ffa';
 $('rule').addEventListener('change', () => {
   store.set('kb-rule', $('rule').value);
+  renderRules();
   showPreview();
 });
+// Game types as icon tiles
+function renderRules() {
+  $('rulePick').innerHTML = RULE_IDS.map((id) => `<button class="ruleTile${$('rule').value === id ? ' on' : ''}" data-id="${id}"><i>${RULES[id].icon}</i><b>${RULES[id].name}</b></button>`).join('');
+  for (const b of $('rulePick').children) {
+    b.onclick = () => {
+      $('rule').value = b.dataset.id;
+      $('rule').dispatchEvent(new Event('change'));
+    };
+  }
+}
+// Small option dropdowns become rows of chips
+for (const box of document.querySelectorAll('.chips[data-for]')) {
+  const sel = $(box.dataset.for);
+  const draw = () => {
+    box.innerHTML = [...sel.options].map((o) => `<button class="chip${o.value === sel.value ? ' on' : ''}" data-v="${o.value}">${o.value === '0' && sel.id === 'bots' ? '0' : o.textContent}</button>`).join('');
+    for (const b of box.children) {
+      b.onclick = () => {
+        sel.value = b.dataset.v;
+        sel.dispatchEvent(new Event('change'));
+      };
+    }
+  };
+  sel.addEventListener('change', draw);
+  draw();
+}
 let randomTour = randomTournament();
 const tourMatches = (id) => (id === 'random' ? randomTour : TOURNAMENTS[id]?.matches || TOURNAMENTS.rookie.matches);
 
@@ -240,6 +295,7 @@ for (const id of ['musicToggleMenu', 'musicToggle']) {
 
 function start(net, code, opts) {
   $('menu').classList.add('hidden');
+  showroom.dispose(); // free its WebGL context for the game
   const info = playerInfo();
   const args = { net, sfx, code, ...info, ...opts };
   if (touch) {
@@ -301,6 +357,12 @@ function show(name, push = true) {
   screen = name;
   renderSteps();
   for (const sc of document.querySelectorAll('#menu .screen')) sc.classList.toggle('on', sc.dataset.screen === name);
+  // The showroom and the map grid get the whole width of the screen
+  document.querySelector('.menuPanel').classList.toggle('wide', name === 'car' || name === 'track');
+  if (name === 'car') {
+    showroom.start();
+    refreshCars();
+  } else showroom.stop();
   $('back').classList.toggle('hidden', name === 'start');
   if (name === 'start') {
     trail.length = 0;
@@ -545,6 +607,11 @@ document.addEventListener('keydown', (e) => {
   const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
   if (e.key === 'Escape' || (e.key === 'Backspace' && !typing)) {
     if (!$('back').classList.contains('hidden')) $('back').click();
+    return;
+  }
+  if (!typing && screen === 'car' && ['ArrowLeft', 'ArrowRight'].includes(e.key)) {
+    e.preventDefault();
+    stepCar(e.key === 'ArrowLeft' ? -1 : 1);
     return;
   }
   if (typing || !['ArrowDown', 'ArrowUp'].includes(e.key)) return;

@@ -45,27 +45,32 @@
       </section>
 
       <section class="screen" data-screen="car">
-        <h2 class="secTitle">Select your car</h2>
-        <div class="secBody">
-          <label>Driver name <input id="name" maxlength="16" placeholder="Speedy" autocomplete="off" /></label>
-          <div id="carPick"></div>
-          <div id="carStats" class="carStats"></div>
-          <div id="colors"></div>
-          <button id="carOk" class="ok">OK!</button>
+        <div class="showroom">
+          <canvas id="showroomCanvas"></canvas>
+          <div class="srCount" id="srCount"></div>
+          <div class="srStats" id="carStats"></div>
+          <button class="srArrow prev" id="carPrev" aria-label="Previous car">‹</button>
+          <button class="srArrow next" id="carNext" aria-label="Next car">›</button>
         </div>
+        <div id="carPick" class="carousel"></div>
+        <div class="carRow">
+          <div id="colors" title="Paint"></div>
+          <input id="name" maxlength="16" placeholder="Driver name" autocomplete="off" aria-label="Driver name" />
+        </div>
+        <button id="carOk" class="ok">OK!</button>
       </section>
 
       <section class="screen" data-screen="track">
         <h2 class="secTitle" id="trackTitle">Select track</h2>
         <div class="secBody">
           <div id="cupPick" class="cupPick hidden"></div>
-          <label id="ruleWrap" class="hidden">Game type <select id="rule"></select></label>
+          <div id="ruleWrap" class="hidden"><div class="optLabel">Game type</div><div id="rulePick" class="iconGrid rules"></div><select id="rule" class="hidden"></select></div>
           <p id="ruleDesc" class="ruleDesc hidden"></p>
-          <label id="mapWrap"><span id="mapLabel">Track</span> <select id="map"></select></label>
-          <div id="mapPreview" class="mapPreview"><div class="shot"></div><p class="facts"></p></div>
-          <div class="row2">
-            <label>AI cars
-              <select id="bots">
+          <div id="mapWrap"><div class="optLabel" id="mapLabel">Track</div><div id="mapGrid" class="mapGrid"></div><select id="map" class="hidden"></select></div>
+          <div id="mapPreview" class="mapCaption"><p class="facts"></p></div>
+          <div class="optGrid">
+            <div class="opt"><div class="optLabel">🤖 AI cars</div><div class="chips" data-for="bots"></div>
+              <select id="bots" class="hidden">
                 <option value="0">None</option>
                 <option value="2">2</option>
                 <option value="3" selected>3</option>
@@ -75,9 +80,9 @@
                 <option value="15">15</option>
                 <option value="20">20 🤯</option>
               </select>
-            </label>
-            <label id="lapsWrap">Laps
-              <select id="laps">
+            </div>
+            <div class="opt" id="lapsWrap"><div class="optLabel">🏁 Laps</div><div class="chips" data-for="laps"></div>
+              <select id="laps" class="hidden">
                 <option value="1">1</option>
                 <option value="2">2</option>
                 <option value="3" selected>3</option>
@@ -85,20 +90,20 @@
                 <option value="10">10</option>
                 <option value="20">20 🤯</option>
               </select>
-            </label>
-          </div>
-          <div class="row2">
-            <label>Car size
-              <select id="carSize">
+            </div>
+            <div class="opt"><div class="optLabel">📏 Car size</div><div class="chips" data-for="carSize"></div>
+              <select id="carSize" class="hidden">
                 <option value="0.55">🐭 Tiny</option>
-                <option value="1" selected>Normal</option>
+                <option value="1" selected>🚗 Normal</option>
                 <option value="1.8">🐘 Giant</option>
               </select>
-            </label>
-            <label class="check"><input type="checkbox" id="endless" /> ♾️ Endless nitro</label>
+            </div>
           </div>
-          <label class="check"><input type="checkbox" id="wallDamage" /> 💥 Wall damage <small>hitting walls hurts your car: the harder the hit, the more damage</small></label>
-          <label id="destructWrap" class="check hidden"><input type="checkbox" id="destruct" checked /> 💣 Destructible terrain <small>rockets dig craters, walls break apart</small></label>
+          <div class="toggles">
+            <label class="toggle"><input type="checkbox" id="endless" /><i>♾️</i><b>Endless nitro</b><small>boost never runs out</small></label>
+            <label class="toggle"><input type="checkbox" id="wallDamage" /><i>💥</i><b>Wall damage</b><small>the harder the hit, the more it hurts</small></label>
+            <label id="destructWrap" class="toggle hidden"><input type="checkbox" id="destruct" checked /><i>💣</i><b>Destructible</b><small>rockets dig craters, walls break</small></label>
+          </div>
           <button id="trackOk" class="ok">OK!</button>
           <details class="ctlHelp">
             <summary>Controls</summary>

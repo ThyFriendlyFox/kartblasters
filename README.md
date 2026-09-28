@@ -14,8 +14,8 @@ The menu is split into sections, one step at a time (a row of steps at the top s
 
 1. **Play:** Solo (vs AI, offline), Host online, or Join a friend.
 2. **Mode:** Race, Grand Prix, Battle or Tournament.
-3. **Car:** name, car, colour (with its stat bars).
-4. **Track / Cup / Arena / Tournament** and the options below. Grand Prix cups are picked from medallion cards: 🏁 Classic, ⛰️ Epic, 🌈 Everything and 🎲 Random. Battle also has a **Game type** picker, and tournaments have their own medal cards (see below).
+3. **Car:** a showroom with your car turning on a lit turntable and its stat bars, a carousel of every car along the bottom (click, or use the ◀ ▶ arrows / arrow keys), your paint colour and driver name.
+4. **Track / Cup / Arena / Tournament** and the options below. Grand Prix cups are picked from medallion cards: 🏁 Classic, ⛰️ Epic, 🌈 Everything and 🎲 Random. Tracks and arenas are a grid of aerial shots, battle game types are icon tiles, and the options are chips (AI cars, laps, car size) and on/off tiles (endless nitro, wall damage, destructible terrain). Tournaments have their own medal cards (see below). The map shots and car pictures are prerendered (`npm run thumbs` regenerates them after changing a map or car).
 5. **Lobby** (online): the room code and invite link, everyone who's joined with their car, the host's settings, and a START button for the host. Friends who join wait here; anyone can change car from the lobby. People who join after the race has started go straight in.
 
 Joining a friend goes: car → room code → lobby. Invite links (`?room=CODE`) skip to the car screen. Arrow keys move between choices, Esc goes back.

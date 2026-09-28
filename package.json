@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "thumbs": "node scripts/render-car-thumbs.mjs"
+    "thumbs": "node scripts/render-car-thumbs.mjs && node scripts/render-map-thumbs.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",

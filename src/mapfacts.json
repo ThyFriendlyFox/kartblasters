@@ -1,0 +1,66 @@
+{
+ "race-orange": [
+  "1.0 km lap",
+  "≈ 0:19 per lap"
+ ],
+ "race-neon": [
+  "1.4 km lap",
+  "≈ 0:26 per lap"
+ ],
+ "race-canyon": [
+  "1.3 km lap",
+  "≈ 0:24 per lap"
+ ],
+ "race-volcano": [
+  "1.7 km lap",
+  "≈ 0:32 per lap"
+ ],
+ "race-twin": [
+  "1.7 km lap",
+  "≈ 0:31 per lap",
+  "3 routes"
+ ],
+ "race-junction": [
+  "1.8 km lap",
+  "≈ 0:33 per lap",
+  "3 routes"
+ ],
+ "race-summit": [
+  "7.2 km lap",
+  "≈ 2:11 per lap"
+ ],
+ "race-colossus": [
+  "6.3 km lap",
+  "≈ 1:54 per lap"
+ ],
+ "race-skyline": [
+  "5.8 km lap",
+  "≈ 1:46 per lap"
+ ],
+ "race-chaos": [
+  "5.6 km lap",
+  "≈ 1:41 per lap",
+  "3 routes"
+ ],
+ "race-lagoon": [
+  "2.6 km lap",
+  "≈ 0:48 per lap"
+ ],
+ "race-gyro": [
+  "6.1 km lap",
+  "≈ 1:50 per lap",
+  "4 routes"
+ ],
+ "battle-stadium": [
+  "180 m arena"
+ ],
+ "battle-craters": [
+  "180 m arena"
+ ],
+ "battle-daytona": [
+  "422 m arena"
+ ],
+ "battle-cube": [
+  "180 m arena"
+ ]
+}
