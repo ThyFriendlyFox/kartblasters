@@ -288,12 +288,7 @@ export class Game {
         const slot = e.target.closest('.wslot');
         if (!slot) return;
         e.preventDefault();
-        const w = SLOTS[[...slot.parentNode.children].indexOf(slot)];
-        // Tap the gun you're holding again to put it in your left hand too
-        if (w === this.me.weapon && (w === 'blaster' || this.me.inv[w] > 0)) {
-          this.me.weapon2 = this.me.weapon2 === w ? null : w;
-          this.hud.toast(this.me.weapon2 ? `✌️ Left hand: ${WEAPONS[w].name}` : 'Left hand empty');
-        } else this.selectWeapon(w);
+        this.selectWeapon(SLOTS[[...slot.parentNode.children].indexOf(slot)]);
       });
     }
     c.addEventListener('click', lock);
@@ -342,7 +337,6 @@ export class Game {
         if (w) this.selectWeapon(w);
       }
       if (e.code === 'Minus') this.selectWeapon('needler');
-      if (e.code === 'KeyF') this.cycleOffhand();
       if (e.code === 'KeyM') {
         this.sfx.setMuted(!this.sfx.muted);
         this.hud.toast(this.sfx.muted ? 'Sound off' : 'Sound on');
@@ -553,6 +547,8 @@ export class Game {
   selectWeapon(key) {
     const me = this.me;
     if (!WEAPONS[key] || !(key === 'blaster' || me.inv[key] > 0) || me.weapon === key) return;
+    // Always dual wielding: the gun you were holding moves to your left hand
+    me.weapon2 = me.weapon;
     me.weapon = key;
     this.sfx.play('hitmark', 0.4);
   }
@@ -584,9 +580,11 @@ export class Game {
     } else {
       const cd = hand ? 'cooldown2' : 'cooldown';
       if (k[cd] > 0) return;
+      // An empty hand grabs another gun you own (or the Blaster)
+      const spare = (other) => SLOTS.find((x) => x !== 'blaster' && x !== other && k.inv[x] > 0) || 'blaster';
       const drop = () => {
-        if (hand) k.weapon2 = null;
-        else k.weapon = 'blaster';
+        if (hand) k.weapon2 = spare(k.weapon);
+        else k.weapon = spare(k.weapon2);
       };
       if (weapon === 'blaster') {
         if (k.overheated) return;
@@ -605,8 +603,8 @@ export class Game {
         if (k.inv[weapon] <= 0) {
           delete k.inv[weapon];
           if (k === this.me) this.hud.toast(`${w.name} is empty`);
-          if (k.weapon === weapon) k.weapon = 'blaster';
-          if (k.weapon2 === weapon) k.weapon2 = null;
+          if (k.weapon === weapon) k.weapon = spare(k.weapon2 === weapon ? null : k.weapon2);
+          if (k.weapon2 === weapon) k.weapon2 = spare(k.weapon);
         }
       }
       k[cd] = w.cooldown * (k.bot ? 1.5 : 1);
@@ -614,16 +612,6 @@ export class Game {
     this.fireFrom(k, weapon, k.muzzleWorld(_a, hand ? k.muzzle2 : k.muzzle).clone());
   }
 
-  /** Dual wield: cycle the left-hand gun through what you own (and back to none). */
-  cycleOffhand() {
-    const me = this.me;
-    const owned = [null, ...SLOTS.filter((w) => w === 'blaster' || me.inv[w] > 0)];
-    const i = owned.indexOf(me.weapon2 ?? null);
-    me.weapon2 = owned[(i + 1) % owned.length];
-    me.cooldown2 = Math.max(me.cooldown2 || 0, 0.2);
-    this.sfx.play('hitmark', 0.4);
-    this.hud.toast(me.weapon2 ? `✌️ Dual wielding: ${WEAPONS[me.weapon].name} + ${WEAPONS[me.weapon2].name}` : 'Left hand empty');
-  }
 
   fireFrom(k, weapon, origin) {
     const w = WEAPONS[weapon];
@@ -1102,7 +1090,7 @@ export class Game {
     const pref = botPreference(kart.pos.distanceTo(t.pos));
     kart.weapon = pref.find((w) => kart.inv[w] > 0) || 'blaster';
     // ...and their next favourite in the other hand
-    kart.weapon2 = pref.find((w) => kart.inv[w] > 0 && w !== kart.weapon) || (kart.weapon !== 'blaster' ? 'blaster' : null);
+    kart.weapon2 = pref.find((w) => kart.inv[w] > 0 && w !== kart.weapon) || 'blaster';
   }
 
   // ---------- destructible terrain ----------
@@ -1285,7 +1273,13 @@ export class Game {
     if (it.type === 'weapon') {
       const w = WEAPONS[it.w];
       k.inv[it.w] = Math.min(w.ammo * MAX_AMMO_MULT, (k.inv[it.w] || 0) + w.ammo);
-      if (k.weapon === 'blaster') k.weapon = it.w;
+      // A new gun goes in a hand holding a Blaster (the right one first)
+      if (k.weapon !== it.w && k.weapon2 !== it.w) {
+        if (k.weapon === 'blaster') {
+          k.weapon2 = 'blaster';
+          k.weapon = it.w;
+        } else if (!k.weapon2 || k.weapon2 === 'blaster') k.weapon2 = it.w;
+      }
     }
     if (k === this.me) {
       this.sfx.play('pickup');

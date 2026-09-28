@@ -97,7 +97,7 @@ Inspired by the Raze flash games. Everyone starts with the Blaster; the rest com
 
 Every weapon's projectiles fly at their own speed, from drifting bubbles (26) and seeking needles (58) up through the Blaster (105), shotgun pellets (170) and minigun lasers (240) to the Holy Grail (640); the ranges are the same as before.
 
-**Dual wielding** ✌️: press **F** to put a second gun in your left hand (it cycles through the guns you own, including the same one twice, then back to none). Left click fires both at once; each hand has its own fire rate and uses its own ammo. On touch screens, tap the weapon you're holding again to put it in your left hand. AI cars dual wield their two favourite weapons for the range they're at.
+**Dual wielding** ✌️ is automatic: you always hold two guns and left click fires both. You start with twin Blasters (which overheat twice as fast). Pick up a gun and it goes in a hand holding a Blaster; switch weapons (1–0, -, wheel) and the gun you were holding moves to your left hand. Each hand has its own fire rate and uses its own ammo; when one runs dry that hand grabs another gun you own (or a Blaster). The HUD marks the left-hand gun with an L. AI cars dual wield their two favourite weapons for the range.
 
 Rockets stay on right click / E / Q, with ammo from the red pickups. AI cars grab weapon crates too and pick the best weapon for the range they're fighting at.
 
@@ -153,7 +153,6 @@ Take the jumps fast: if you come up short, you wipe out and respawn past the lan
 | Left click | Fire the current weapon |
 | 1 … 9, 0 (top row) / mouse wheel | Switch weapon |
 | Right click / E / Q | Rocket (grab red pickups for ammo) |
-| F | Dual wield: cycle the gun in your left hand |
 | Shift | Boost |
 | Space | Drift while steering (as in race mode: the tail swings out, sparks heat up, nitro charges) / handbrake when slow |
 | Tab | Scoreboard |

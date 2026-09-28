@@ -213,7 +213,7 @@ export class Kart {
     this.rockets = 2;
     this.inv = {}; // weapon -> ammo (the blaster is always available)
     this.weapon = 'blaster';
-    this.weapon2 = null; // left-hand gun when dual wielding
+    this.weapon2 = 'blaster'; // left-hand gun: everyone dual wields, starting with twin Blasters
     this.cooldown2 = 0;
     this.burnT = 0;
     this.cooldown = 0;
