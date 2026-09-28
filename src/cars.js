@@ -126,6 +126,27 @@ export function buildCar(type, color) {
   return { group, body, wheels, frontPivots, flames, roofY, wheelRadius: custom ? custom.axles[0].r : r };
 }
 
+/** Paint colours players can pick. */
+export const COLORS = ['#ff3b3b', '#ff9f1c', '#ffe03b', '#3bff6f', '#2ec4ff', '#6a5cff', '#ff4fd8', '#f5f5f5'];
+
+/**
+ * A car's picture in a colour. Every car in every palette colour is
+ * prerendered to public/cars (see scripts/render-car-thumbs.mjs), so the
+ * picker just swaps images; anything else is rendered on the spot.
+ */
+export function carImage(type, color, size = 96) {
+  if (COLORS.includes(color) && CARS[type]) return `/cars/${type}-${color.slice(1)}.webp`;
+  return carThumbnail(type, color, size);
+}
+
+/** Warm the browser cache with every prerendered picture, current colour first. */
+export function preloadCarImages(first) {
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
+  idle(() => {
+    for (const c of [first, ...COLORS.filter((c) => c !== first)]) for (const id of CAR_IDS) new Image().src = carImage(id, c);
+  });
+}
+
 /** Small rotating preview renderer for the menu car picker. */
 export function carThumbnail(type, color, size = 96) {
   const renderer = carThumbnail.renderer ||= new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });

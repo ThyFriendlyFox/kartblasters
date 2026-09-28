@@ -4,7 +4,7 @@ import { Game, COLORS } from './game.js';
 import { RaceGame } from './race.js';
 import { Sfx } from './audio.js';
 import { isTouchDevice, requestMotionPermission, enterLandscape, MobileInput } from './mobile.js';
-import { CARS, CAR_IDS, carThumbnail, statBarsHTML } from './cars.js';
+import { CARS, CAR_IDS, carImage, preloadCarImages, statBarsHTML } from './cars.js';
 import { TRACKS, TRACK_IDS } from './trackdefs.js';
 import { mapPreview } from './preview.js';
 
@@ -80,7 +80,7 @@ function refreshCars(redraw = false) {
     carBtns[id].classList.toggle('on', id === car);
     if (redraw) {
       try {
-        carBtns[id].querySelector('img').src = carThumbnail(id, color);
+        carBtns[id].querySelector('img').src = carImage(id, color);
       } catch {
         // WebGL unavailable: the names still work
       }
@@ -102,6 +102,7 @@ for (const c of COLORS) {
   swatches.appendChild(b);
 }
 refreshCars(true);
+preloadCarImages(color);
 
 // ---- mode / map
 function refreshMode() {
@@ -337,7 +338,7 @@ const thumb = (c, col) => {
   const k = `${c}|${col}`;
   if (!thumbs.has(k)) {
     try {
-      thumbs.set(k, carThumbnail(c, col));
+      thumbs.set(k, carImage(c, col));
     } catch {
       thumbs.set(k, '');
     }

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { buildArena, pointBlocked } from './arena.js';
 import { Kart } from './kart.js';
-import { CARS, CAR_IDS, wallDamage, carThumbnail, statBarsHTML } from './cars.js';
+import { CARS, CAR_IDS, COLORS, wallDamage, carImage, statBarsHTML } from './cars.js';
 import { Fx, SkidMarks } from './fx.js';
 import { BotBrain, BOT_NAMES, botColor } from './bots.js';
 import { musicFor } from './music.js';
@@ -9,7 +9,7 @@ import { unlock } from './achievements.js';
 import { Hud } from './hud.js';
 import { WEAPONS, SLOTS, MAX_AMMO_MULT, projectileMesh, botPreference } from './weapons.js';
 
-export const COLORS = ['#ff3b3b', '#ff9f1c', '#ffe03b', '#3bff6f', '#2ec4ff', '#6a5cff', '#ff4fd8', '#f5f5f5'];
+export { COLORS };
 
 const BURN_DPS = 9;
 const HIT_R = 1.9;
@@ -985,7 +985,7 @@ export class Game {
       b.className = 'carBtn';
       let img = '';
       try {
-        img = `<img alt="" src="${carThumbnail(id, this.me.color, 72)}" />`;
+        img = `<img alt="" src="${carImage(id, this.me.color, 72)}" />`;
       } catch {}
       b.innerHTML = `${img}<span>${CARS[id].name}</span><small>${CARS[id].hp} HP</small>`;
       b.onclick = (e) => {

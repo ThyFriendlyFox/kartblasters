@@ -617,27 +617,49 @@ export class Music {
 
   lead(time, note, dur) {
     const ctx = this.ctx;
+    if (this.track.kit === 'hard') {
+      // Supersaw pluck: three detuned saws and a bell an octave up, a filter
+      // that snaps shut after the attack and no vibrato (a held, wobbling
+      // saw reads as brass)
+      const f = ctx.createBiquadFilter(), hp = ctx.createBiquadFilter(), g = ctx.createGain();
+      f.type = 'lowpass';
+      f.Q.value = 3;
+      f.frequency.setValueAtTime(7500, time);
+      f.frequency.exponentialRampToValueAtTime(1700, time + 0.16);
+      hp.type = 'highpass';
+      hp.frequency.value = 350;
+      const len = Math.min(dur, 0.6);
+      g.gain.setValueAtTime(0.0001, time);
+      g.gain.exponentialRampToValueAtTime(0.12, time + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.05, time + 0.18);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + len);
+      f.connect(hp).connect(g).connect(this.out);
+      g.connect(this.echoIn);
+      for (const [type, mul, det, lvl] of [['sawtooth', 1, -11, 1], ['sawtooth', 1, 0, 1], ['sawtooth', 1, 11, 1], ['sine', 2, 0, 1.6]]) {
+        const o = ctx.createOscillator(), og = ctx.createGain();
+        o.type = type;
+        o.frequency.value = mtof(note) * mul;
+        o.detune.value = det;
+        og.gain.value = lvl / 3;
+        o.connect(og).connect(f);
+        o.start(time);
+        o.stop(time + len + 0.05);
+      }
+      return;
+    }
     const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
     o.type = this.track.lead;
     o.frequency.value = mtof(note);
     lfo.frequency.value = 5.5;
     lg.gain.value = 6; // vibrato in cents
     lfo.connect(lg).connect(o.detune);
-    const hard = this.track.kit === 'hard';
-    const lv = hard ? 0.14 : 0.11;
     f.type = 'lowpass';
-    f.frequency.value = hard ? 5200 : 2400;
+    f.frequency.value = 2400;
     g.gain.setValueAtTime(0.0001, time);
-    g.gain.exponentialRampToValueAtTime(lv, time + 0.02);
-    g.gain.setValueAtTime(lv, time + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.11, time + 0.02);
+    g.gain.setValueAtTime(0.11, time + dur * 0.7);
     g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
-    if (hard) {
-      const hp = ctx.createBiquadFilter();
-      hp.type = 'highpass';
-      hp.frequency.value = 600;
-      o.connect(hp).connect(f);
-    } else o.connect(f);
-    f.connect(g).connect(this.out);
+    o.connect(f).connect(g).connect(this.out);
     g.connect(this.echoIn);
     o.start(time);
     lfo.start(time);
