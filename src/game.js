@@ -15,7 +15,6 @@ const BURN_DPS = 9;
 const HIT_R = 1.9;
 const RESPAWN_MS = 3000;
 const ITEM_RESPAWN_MS = 15000;
-const AKIMBO_MS = 15000; // how long an akimbo pickup lasts
 const SUPERCOMBINE = 7; // needles stuck in one car to set it off
 const NEEDLE_MS = 3000; // how long a stuck needle stays live
 const SNAP_MS = 50;
@@ -117,23 +116,6 @@ export class Game {
         g.add(body);
         return g;
       },
-      akimbo: () => {
-        // Two crossed pistols
-        const g = new THREE.Group();
-        const m = new THREE.MeshStandardMaterial({ color: '#ff9f1c', metalness: 0.6, roughness: 0.3, emissive: '#6a3a00' });
-        for (const s of [-1, 1]) {
-          const gun = new THREE.Group();
-          const slide = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 1.5), m);
-          const grip = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.8, 0.35), m);
-          grip.position.set(0, -0.45, -0.5);
-          grip.rotation.x = -0.25;
-          gun.add(slide, grip);
-          gun.rotation.set(0, s * 0.6, s * 0.35);
-          gun.position.x = s * 0.35;
-          g.add(gun);
-        }
-        return g;
-      },
       health: () => {
         const g = new THREE.Group();
         const m = new THREE.MeshBasicMaterial({ color: '#4ade80' });
@@ -180,7 +162,7 @@ export class Game {
       g.add(sp);
       return g;
     };
-    const ringColors = { rocket: '#ff3b3b', health: '#4ade80', boost: '#facc15', akimbo: '#ff9f1c' };
+    const ringColors = { rocket: '#ff3b3b', health: '#4ade80', boost: '#facc15' };
     for (const it of this.world.items) {
       const g = mk[it.type](it);
       if (it.type === 'weapon') ringColors.weapon = WEAPONS[it.w].color;
@@ -306,7 +288,12 @@ export class Game {
         const slot = e.target.closest('.wslot');
         if (!slot) return;
         e.preventDefault();
-        this.selectWeapon(SLOTS[[...slot.parentNode.children].indexOf(slot)]);
+        const w = SLOTS[[...slot.parentNode.children].indexOf(slot)];
+        // Tap the gun you're holding again to put it in your left hand too
+        if (w === this.me.weapon && (w === 'blaster' || this.me.inv[w] > 0)) {
+          this.me.weapon2 = this.me.weapon2 === w ? null : w;
+          this.hud.toast(this.me.weapon2 ? `✌️ Left hand: ${WEAPONS[w].name}` : 'Left hand empty');
+        } else this.selectWeapon(w);
       });
     }
     c.addEventListener('click', lock);
@@ -355,6 +342,7 @@ export class Game {
         if (w) this.selectWeapon(w);
       }
       if (e.code === 'Minus') this.selectWeapon('needler');
+      if (e.code === 'KeyF') this.cycleOffhand();
       if (e.code === 'KeyM') {
         this.sfx.setMuted(!this.sfx.muted);
         this.hud.toast(this.sfx.muted ? 'Sound off' : 'Sound on');
@@ -517,7 +505,7 @@ export class Game {
     const snap = (k) => [
       k.id, r2(k.pos.x), r2(k.pos.y), r2(k.pos.z), r2(k.vel.x), r2(k.vel.y), r2(k.vel.z),
       r3(k.heading), r3(k.aimYaw), r3(k.aimPitch), Math.round(k.hp), k.alive ? 1 : 0, k.boosting ? 1 : 0,
-      now < k.shieldUntil ? 1 : 0, k.drifting ? 1 : 0, now < (k.akimboUntil || 0) ? 1 : 0,
+      now < k.shieldUntil ? 1 : 0, k.drifting ? 1 : 0, k.weapon2 ? 1 : 0,
       // Curved arenas also need which way is up and where we're pointing
       ...(this.world.surface && k.up ? [r2(k.up.x), r2(k.up.y), r2(k.up.z), r2(k.fwd3.x), r2(k.fwd3.y), r2(k.fwd3.z)] : []),
     ];
@@ -575,7 +563,11 @@ export class Game {
     this.selectWeapon(owned[(i + dir + owned.length) % owned.length]);
   }
 
-  tryFire(k, weapon, now) {
+  /**
+   * Fire one hand's weapon (hand 1 = the left-hand gun when dual wielding).
+   * Each hand has its own cooldown and draws on that weapon's ammo.
+   */
+  tryFire(k, weapon, now, hand = 0) {
     const w = WEAPONS[weapon];
     if (!w) return;
     if (weapon === 'rocket') {
@@ -590,7 +582,12 @@ export class Game {
       }
       k.rockets--;
     } else {
-      if (k.cooldown > 0) return;
+      const cd = hand ? 'cooldown2' : 'cooldown';
+      if (k[cd] > 0) return;
+      const drop = () => {
+        if (hand) k.weapon2 = null;
+        else k.weapon = 'blaster';
+      };
       if (weapon === 'blaster') {
         if (k.overheated) return;
         k.heat += w.heat;
@@ -601,21 +598,31 @@ export class Game {
         }
       } else {
         if (!(k.inv[weapon] > 0)) {
-          k.weapon = 'blaster';
+          drop();
           return;
         }
         k.inv[weapon]--;
         if (k.inv[weapon] <= 0) {
           delete k.inv[weapon];
           if (k === this.me) this.hud.toast(`${w.name} is empty`);
-          k.weapon = 'blaster';
+          if (k.weapon === weapon) k.weapon = 'blaster';
+          if (k.weapon2 === weapon) k.weapon2 = null;
         }
       }
-      k.cooldown = w.cooldown * (k.bot ? 1.5 : 1);
+      k[cd] = w.cooldown * (k.bot ? 1.5 : 1);
     }
-    // Akimbo: both guns fire every shot
-    const akimbo = performance.now() < (k.akimboUntil || 0);
-    for (const gun of akimbo ? [k.muzzle, k.muzzle2] : [k.muzzle]) this.fireFrom(k, weapon, k.muzzleWorld(_a, gun).clone());
+    this.fireFrom(k, weapon, k.muzzleWorld(_a, hand ? k.muzzle2 : k.muzzle).clone());
+  }
+
+  /** Dual wield: cycle the left-hand gun through what you own (and back to none). */
+  cycleOffhand() {
+    const me = this.me;
+    const owned = [null, ...SLOTS.filter((w) => w === 'blaster' || me.inv[w] > 0)];
+    const i = owned.indexOf(me.weapon2 ?? null);
+    me.weapon2 = owned[(i + 1) % owned.length];
+    me.cooldown2 = Math.max(me.cooldown2 || 0, 0.2);
+    this.sfx.play('hitmark', 0.4);
+    this.hud.toast(me.weapon2 ? `✌️ Dual wielding: ${WEAPONS[me.weapon].name} + ${WEAPONS[me.weapon2].name}` : 'Left hand empty');
   }
 
   fireFrom(k, weapon, origin) {
@@ -1094,6 +1101,8 @@ export class Game {
     if (!t) return;
     const pref = botPreference(kart.pos.distanceTo(t.pos));
     kart.weapon = pref.find((w) => kart.inv[w] > 0) || 'blaster';
+    // ...and their next favourite in the other hand
+    kart.weapon2 = pref.find((w) => kart.inv[w] > 0 && w !== kart.weapon) || (kart.weapon !== 'blaster' ? 'blaster' : null);
   }
 
   // ---------- destructible terrain ----------
@@ -1273,7 +1282,6 @@ export class Game {
     if (it.type === 'rocket') k.rockets = Math.min(9, k.rockets + 3);
     if (it.type === 'health') k.hp = Math.min(k.maxHp, k.hp + 50);
     if (it.type === 'boost') k.boost = 1;
-    if (it.type === 'akimbo') k.akimboUntil = performance.now() + AKIMBO_MS;
     if (it.type === 'weapon') {
       const w = WEAPONS[it.w];
       k.inv[it.w] = Math.min(w.ammo * MAX_AMMO_MULT, (k.inv[it.w] || 0) + w.ammo);
@@ -1281,7 +1289,7 @@ export class Game {
     }
     if (k === this.me) {
       this.sfx.play('pickup');
-      this.hud.toast(it.type === 'weapon' ? `${WEAPONS[it.w].icon} ${WEAPONS[it.w].name} [${WEAPONS[it.w].key || WEAPONS[it.w].slot}]` : { rocket: '+3 Rockets', health: '+50 Health', boost: 'Boost refilled', akimbo: `🔫🔫 AKIMBO! Double guns for ${AKIMBO_MS / 1000}s` }[it.type]);
+      this.hud.toast(it.type === 'weapon' ? `${WEAPONS[it.w].icon} ${WEAPONS[it.w].name} [${WEAPONS[it.w].key || WEAPONS[it.w].slot}]` : { rocket: '+3 Rockets', health: '+50 Health', boost: 'Boost refilled' }[it.type]);
     }
   }
 
@@ -1328,7 +1336,10 @@ export class Game {
         me.aimYaw -= dx * 0.0065;
         me.aimPitch = Math.max(this.pitchMin, Math.min(this.pitchMax, me.aimPitch - dy * 0.005));
       }
-      if (this.locked && (this.mouse.left || m?.fire)) this.tryFire(me, me.weapon, now);
+      if (this.locked && (this.mouse.left || m?.fire)) {
+        this.tryFire(me, me.weapon, now);
+        if (me.weapon2) this.tryFire(me, me.weapon2, now, 1);
+      }
       if (this.locked && (this.mouse.right || m?.rocket || this.keys.has('KeyE') || this.keys.has('KeyQ'))) this.tryFire(me, 'rocket', now);
     } else if (this.joined && me.respawnAt && now >= me.respawnAt) {
       me.respawnAt = 0;
@@ -1350,7 +1361,10 @@ export class Game {
       const ev = kart.simulate(dt, input, this.world, all);
       this.kartEvents(kart, ev);
       if (this.mods.damage && wallDamage(ev.wall) > 0) this.applyBotDamage(kart.id, wallDamage(ev.wall), kart.id, 'wall', now);
-      if (input.fire) this.tryFire(kart, kart.weapon, now);
+      if (input.fire) {
+        this.tryFire(kart, kart.weapon, now);
+        if (kart.weapon2) this.tryFire(kart, kart.weapon2, now, 1);
+      }
       if (input.rocket) this.tryFire(kart, 'rocket', now);
     }
 

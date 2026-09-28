@@ -152,7 +152,7 @@ export class Hud {
   /** Row of weapon slots 1..0: owned ones light up, current one highlighted, with ammo. */
   weaponBar(k) {
     const el = $('weaponBar');
-    const key = `${k.weapon}|${SLOTS.map((w) => k.inv[w] || 0).join(',')}`;
+    const key = `${k.weapon}|${k.weapon2}|${SLOTS.map((w) => k.inv[w] || 0).join(',')}`;
     if (this.last.wbar === key) return;
     this.last.wbar = key;
     if (!el.children.length) {
@@ -172,10 +172,11 @@ export class Hud {
       const owned = w === 'blaster' || k.inv[w] > 0;
       d.classList.toggle('owned', owned);
       d.classList.toggle('on', k.weapon === w);
+      d.classList.toggle('off', k.weapon2 === w);
       d.style.setProperty('--wc', WEAPONS[w].color || '#ffffff');
       d.querySelector('small').textContent = w === 'blaster' ? '∞' : owned ? k.inv[w] : '';
     });
-    this.wName.textContent = WEAPONS[k.weapon]?.name || '';
+    this.wName.textContent = (WEAPONS[k.weapon]?.name || '') + (k.weapon2 ? ` + ${WEAPONS[k.weapon2].name} (left hand)` : '');
   }
 
   minimap(world, karts, items, me) {
@@ -208,7 +209,7 @@ export class Hud {
     }
     for (const it of items.values()) {
       if (!it.active) continue;
-      g.fillStyle = it.type === 'rocket' ? '#ff4d4d' : it.type === 'health' ? '#4ade80' : it.type === 'akimbo' ? '#ff9f1c' : '#facc15';
+      g.fillStyle = it.type === 'rocket' ? '#ff4d4d' : it.type === 'health' ? '#4ade80' : '#facc15';
       g.fillRect(tx(it.x) - 2, tz(it.z) - 2, 4, 4);
     }
     for (const k of karts.values()) {

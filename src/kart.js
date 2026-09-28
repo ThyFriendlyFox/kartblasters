@@ -131,7 +131,7 @@ export class Kart {
     this.muzzle = new THREE.Object3D();
     this.muzzle.position.set(0, 0.1, 1.6);
     barrel.add(this.muzzle);
-    // Akimbo: a second gun appears beside the first while the pickup lasts
+    // Dual wielding: a second gun (the left hand) appears beside the first
     const barrel2 = barrel.clone();
     barrel2.visible = false;
     turret.add(barrel2);
@@ -213,7 +213,8 @@ export class Kart {
     this.rockets = 2;
     this.inv = {}; // weapon -> ammo (the blaster is always available)
     this.weapon = 'blaster';
-    this.akimboUntil = 0;
+    this.weapon2 = null; // left-hand gun when dual wielding
+    this.cooldown2 = 0;
     this.burnT = 0;
     this.cooldown = 0;
     this.shieldUntil = now + 2000;
@@ -348,6 +349,7 @@ export class Kart {
     this.heat = Math.max(0, this.heat - dt * (this.overheated ? 0.45 : 0.6));
     if (this.overheated && this.heat <= 0.25) this.overheated = false;
     this.cooldown -= dt;
+    this.cooldown2 -= dt;
     this.rocketCooldown -= dt;
 
     return ev;
@@ -471,6 +473,7 @@ export class Kart {
     this.heat = Math.max(0, this.heat - dt * (this.overheated ? 0.45 : 0.6));
     if (this.overheated && this.heat <= 0.25) this.overheated = false;
     this.cooldown -= dt;
+    this.cooldown2 -= dt;
     this.rocketCooldown -= dt;
     return ev;
   }
@@ -515,7 +518,7 @@ export class Kart {
     this.boosting = !!e[12];
     this.shielded = !!e[13];
     this.drifting = !!e[14];
-    this.akimbo = !!e[15];
+    this.dual = !!e[15];
     if (e.length > 21) {
       // Orientation on a curved arena: surface up and heading along it
       (this.netUp ||= new THREE.Vector3()).set(e[16], e[17], e[18]);
@@ -613,9 +616,9 @@ export class Kart {
       this.turret.rotation.y = this.aimYaw;
       this.barrel.rotation.x = -this.aimPitch;
     }
-    const akimbo = this.local || this.bot ? now < (this.akimboUntil || 0) : this.akimbo;
-    this.barrel2.visible = !!akimbo;
-    this.barrel.position.x = akimbo ? -0.55 : 0;
+    const dual = this.local || this.bot ? !!this.weapon2 : this.dual;
+    this.barrel2.visible = dual;
+    this.barrel.position.x = dual ? -0.55 : 0;
     this.barrel2.position.x = 0.55;
     this.barrel2.rotation.x = this.barrel.rotation.x;
     const shielded = this.local || this.bot ? now < this.shieldUntil : this.shielded;

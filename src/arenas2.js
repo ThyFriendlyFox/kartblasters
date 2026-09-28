@@ -93,13 +93,12 @@ function addPads(scene, world, spots) {
   }
 }
 
-function addItems(world, { rocket = [], health = [], boost = [], akimbo = [], weapon = [] }) {
+function addItems(world, { rocket = [], health = [], boost = [], weapon = [] }) {
   let id = 0;
   for (const [x, z] of rocket) world.items.push({ id: id++, type: 'rocket', x, z });
   for (const [x, z] of health) world.items.push({ id: id++, type: 'health', x, z });
   for (const [x, z] of boost) world.items.push({ id: id++, type: 'boost', x, z });
   for (const [w, x, z] of weapon) world.items.push({ id: id++, type: 'weapon', w, x, z });
-  for (const [x, z] of akimbo) world.items.push({ id: id++, type: 'akimbo', x, z });
 }
 
 function staticBox(scene, world, cx, cz, w, d, h, mat) {
@@ -411,7 +410,6 @@ export function buildDaytona(scene, { destructible = false } = {}) {
     rocket: [on(0.12, 10), on(0.37, 20), on(0.62, 10), on(0.87, 20)],
     health: [on(0.25, 15), on(0.75, 15), [60, 25], [-60, -20]],
     boost: [on(0.05, 22), on(0.3, 8), on(0.55, 22), on(0.8, 8)],
-    akimbo: [[0, 20], on(0.5, 15)],
     weapon: [
       ['hail', ...on(0.18, 15)], ['bubble', ...on(0.43, 15)], ['grenade', ...on(0.68, 15)], ['electro', ...on(0.93, 15)],
       ['sniper', 95, 40], ['beam', -95, -30], ['minigun', 30, 0], ['shotgun', -30, -45], ['flame', 55, -45], ['needler', -60, 45],
@@ -583,7 +581,6 @@ export function buildCube(scene, { destructible = false } = {}) {
     rocket: [[-55, 0], [55, 0]],
     health: [[0, 0], [-60, -30], [60, 30]],
     boost: [[-45, -40], [45, 40], [-45, 40], [45, -40]],
-    akimbo: [[0, -20], [0, 20]],
     weapon: [
       ['hail', -20, 20], ['bubble', 20, -20], ['grenade', -20, -20], ['electro', 20, 20], ['sniper', -62, 0],
       ['beam', 62, 0], ['minigun', 0, 40], ['shotgun', 0, -40], ['flame', -35, 30], ['needler', 35, -30],

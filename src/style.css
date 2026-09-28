@@ -493,6 +493,9 @@ body.mode-race #weaponBar { display: none; }
 .wslot b { position: absolute; top: 2px; left: 5px; font-size: 10px; color: var(--muted); }
 .wslot small { font-size: 10px; font-weight: 800; color: var(--text); min-height: 12px; }
 .wslot.owned { opacity: 0.95; }
+/* The left-hand gun when dual wielding */
+.wslot.off { border-style: dashed; border-color: var(--wc); box-shadow: 0 0 8px var(--wc); }
+.wslot.off::after { content: 'L'; position: absolute; top: 2px; right: 5px; font-size: 10px; font-weight: 800; color: var(--wc); }
 .wslot.on { border-color: var(--wc); background: rgba(0, 0, 0, 0.7); transform: translateY(-4px); box-shadow: 0 0 12px var(--wc); }
 .wname {
   position: absolute; bottom: 62px; left: 50%; transform: translateX(-50%);

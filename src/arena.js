@@ -342,7 +342,6 @@ export function buildArena(scene, { map = 'stadium', destructible = false } = {}
   ]) {
     world.items.push({ id: id++, type: 'weapon', w, x, z });
   }
-  for (const [x, z] of [[60, 60], [-60, -60]]) world.items.push({ id: id++, type: 'akimbo', x, z });
 
   // Instanced blocks
   const unit = new THREE.BoxGeometry(1, 1, 1);
