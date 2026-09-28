@@ -15,24 +15,27 @@
     <div id="game"></div>
 
     <!-- Main menu: a run of full-screen steps, like a console kart game -->
-    <div id="menu" class="overlay dd">
-      <div class="ddTop">
-        <button id="back" class="ddBack hidden">◀ Back</button>
-        <div class="brand">KART<span>BLASTERS</span></div>
-        <label class="check musicRow"><input type="checkbox" id="musicToggleMenu" checked /> 🎵</label>
+    <div id="menu" class="overlay">
+      <div class="panel menuPanel">
+      <div class="menuTop">
+        <button id="back" class="ghost menuBack hidden">◀ Back</button>
+        <label class="check musicRow"><input type="checkbox" id="musicToggleMenu" checked /> 🎵 Music</label>
       </div>
+      <h1>KART<span>BLASTERS</span></h1>
+      <p class="tag">Peer-to-peer car battles and stunt-track racing. Pick a car, pick a map, invite a friend.</p>
+      <ol id="steps" class="steps"></ol>
 
       <section class="screen on" data-screen="start">
-        <h2 class="banner">How do you want to play?</h2>
+        <h2 class="secTitle">How do you want to play?</h2>
         <div class="rows">
           <button class="row" data-go="solo"><span class="ring"></span><b>Solo</b><small>Race or battle the AI, no internet needed</small><i>🏎️</i></button>
-          <button class="row" data-go="host"><span class="ring"></span><b>Host online</b><small>Make a room and invite your friends</small><i>🏎️🏎️</i></button>
+          <button class="row" data-go="host"><span class="ring"></span><b>Host online</b><small>Make a room and invite your friends</small><i>🌐</i></button>
           <button class="row" data-go="join"><span class="ring"></span><b>Join a friend</b><small>Got a room code? Hop in</small><i>🤝</i></button>
         </div>
       </section>
 
       <section class="screen" data-screen="mode">
-        <h2 class="banner">Select mode</h2>
+        <h2 class="secTitle">Select mode</h2>
         <div class="rows" id="modeSeg">
           <button class="row" data-mode="race"><span class="ring"></span><b>Race</b><small>One track, stunts and shortcuts</small><i>🏁</i></button>
           <button class="row" data-mode="gp"><span class="ring"></span><b>Grand Prix</b><small>A cup of tracks raced for points</small><i>🏆</i></button>
@@ -41,8 +44,8 @@
       </section>
 
       <section class="screen" data-screen="car">
-        <h2 class="banner">Select your car</h2>
-        <div class="ddPanel">
+        <h2 class="secTitle">Select your car</h2>
+        <div class="secBody">
           <label>Driver name <input id="name" maxlength="16" placeholder="Speedy" autocomplete="off" /></label>
           <div id="carPick"></div>
           <div id="carStats" class="carStats"></div>
@@ -52,9 +55,10 @@
       </section>
 
       <section class="screen" data-screen="track">
-        <h2 class="banner" id="trackTitle">Select track</h2>
-        <div class="ddPanel">
-          <label><span id="mapLabel">Track</span> <select id="map"></select></label>
+        <h2 class="secTitle" id="trackTitle">Select track</h2>
+        <div class="secBody">
+          <div id="cupPick" class="cupPick hidden"></div>
+          <label id="mapWrap"><span id="mapLabel">Track</span> <select id="map"></select></label>
           <div id="mapPreview" class="mapPreview"><div class="shot"></div><p class="facts"></p></div>
           <div class="row2">
             <label>AI cars
@@ -120,8 +124,8 @@
       </section>
 
       <section class="screen" data-screen="code">
-        <h2 class="banner">Join a friend</h2>
-        <div class="ddPanel">
+        <h2 class="secTitle">Join a friend</h2>
+        <div class="secBody">
           <label>Room code</label>
           <div class="joinRow">
             <input id="code" maxlength="5" placeholder="ABCDE" aria-label="Room code" autocomplete="off" />
@@ -132,8 +136,8 @@
       </section>
 
       <section class="screen" data-screen="lobby">
-        <h2 class="banner">Lobby</h2>
-        <div class="ddPanel">
+        <h2 class="secTitle">Lobby</h2>
+        <div class="secBody">
           <div id="lobbyInfo"></div>
           <div id="lobbyPlayers"></div>
           <div class="lobbyBtns">
@@ -145,6 +149,7 @@
       </section>
 
       <div id="menuStatus"></div>
+      </div>
     </div>
 
     <!-- In-game HUD -->

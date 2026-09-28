@@ -11,116 +11,77 @@ const MODES = {
 };
 
 // x = hit, . = rest. 16 steps per bar.
+// riff: X = long power chord, x = short palm-muted chug. acid: 0-7 = scale
+// step above the chord root, o = the root an octave up, . = rest.
 export const TRACKS = {
-  // The menu tune is built up a layer at a time as you go through the menu
+  // The menu tune (Vapor City style), built up a layer at a time as you go through the menu
   menu: {
-    bpm: 118, root: 50, mode: 'major', prog: [0, 5, 3, 4],
-    kick: 'x...x...x...x...', snare: '....x.......x...', clap: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', ohat: '..x...x...x...x.',
-    bass: '..R...R...R.o.R.', stab: '..x...x...x..x..', stabWave: 'triangle',
-    arp: 'up', arpWave: 'triangle', pad: 'sawtooth', lead: 'triangle', pump: true, swing: 0.06, bright: 0.7,
+    bpm: 126, root: 45, mode: 'minor', prog: [0, 5, 3, 6],
+    kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.xxx.xxx.xxx.xx', ohat: '..x...x...x...x.',
+    bass: 'R.RR.RoRR.RR.RoR', arp: 'updown', arpWave: 'sawtooth', pad: 'sawtooth', lead: 'sawtooth',
+    acid: '0..0o.3.0..5.3o.', riff: 'X.......X...x.x.', echo: 0.4, bright: 0.6,
   },
-  toy: {
-    bpm: 132, root: 52, mode: 'major', prog: [0, 5, 3, 4],
-    kick: 'x...x...x...x...', snare: '....x.......x..x', hat: 'x.x.x.x.x.x.x.x.',
-    bass: 'R.R.oR.RR.R.oR.R', arp: 'updown', arpWave: 'square', pad: 'triangle', lead: 'square', bright: 0.8,
-  },
-  stadium: {
-    bpm: 128, root: 50, mode: 'major', prog: [0, 4, 5, 3],
-    kick: 'x...x...x...x...', snare: '....x.......x...', hat: '..x...x...x...x.',
-    bass: 'R.R.R.oRR.R.R.oR', arp: 'updown', arpWave: 'sawtooth', pad: 'sawtooth', lead: 'square', bright: 0.8,
-  },
-  alpine: {
-    bpm: 138, root: 55, mode: 'major', prog: [0, 3, 4, 5],
-    kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.xx',
-    bass: 'R.oR.RoRR.oR.RoR', arp: 'up', arpWave: 'triangle', pad: 'triangle', lead: 'square', bright: 0.85,
-  },
+  // Neon Junction keeps its signature tune
   neon: {
     bpm: 110, root: 45, mode: 'minor', prog: [0, 5, 2, 6],
     kick: 'x...x...x...x...', snare: '....x.......x...', hat: '..x...x...x...xx',
     bass: 'RRRRRRRRRRRRRRRR', arp: 'up', arpWave: 'sawtooth', pad: 'sawtooth', lead: 'sawtooth', bright: 0.65,
   },
-  desert: {
-    bpm: 124, root: 40, mode: 'minor', prog: [0, 6, 5, 6],
-    kick: 'x..x..x.x..x....', snare: '....x.......x...', hat: 'x.xxx.xxx.xxx.xx',
-    bass: 'R.RR.RoRR.RR.RoR', arp: 'down', arpWave: 'square', pad: 'sawtooth', lead: 'square', bright: 0.7,
-  },
-  volcano: {
-    bpm: 128, root: 38, mode: 'minor', prog: [0, 5, 6, 4],
-    kick: 'x...x..xx...x...', snare: '....x.......x...', hat: 'x.x.x.xxx.x.x.xx',
-    bass: 'RR.RR.RRRR.RR.oR', arp: 'updown', arpWave: 'sawtooth', pad: 'sawtooth', lead: 'sawtooth', bright: 0.55,
-  },
-  battle: {
-    bpm: 144, root: 48, mode: 'minor', prog: [0, 0, 5, 6],
-    kick: 'x..x..x...x..x..', snare: '....x.......x...', hat: 'xxxxxxxxxxxxxxxx',
-    bass: 'RRoRRRoRRRoRRoRR', arp: 'up', arpWave: 'square', pad: 'sawtooth', lead: 'square', bright: 0.75,
-  },
 };
 
 // ---------------- random songs ----------------
+// Three styles modelled on a 2000s arcade-racer soundtrack: every map load
+// rolls a fresh song in one of them (except Neon Junction).
 
 const pick = (rng, a) => a[Math.floor(rng() * a.length)];
 const range = (rng, lo, hi) => lo + Math.round(rng() * (hi - lo));
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const PROGS = {
-  minor: [[0, 5, 2, 6], [0, 3, 4, 0], [0, 5, 6, 4], [0, 6, 5, 6], [0, 2, 5, 4], [0, 3, 6, 5]],
-  major: [[0, 4, 5, 3], [0, 5, 3, 4], [0, 3, 4, 3], [5, 3, 0, 4], [0, 1, 3, 4]],
+  minor: [[0, 5, 2, 6], [0, 3, 4, 0], [0, 5, 6, 4], [0, 6, 5, 6], [0, 0, 5, 6], [0, 3, 6, 5]],
+  major: [[0, 4, 5, 3], [0, 5, 3, 4], [5, 3, 0, 4]],
 };
 
 /**
- * Song styles. Each field is a list to pick from (or a [lo, hi] range for
- * numbers), so every song in a style has the style's groove but its own key,
- * tempo, chords, patterns and hook.
+ * Each field is a list to pick from (or a [lo, hi] range for numbers), so
+ * every song keeps its style's groove but gets its own key, tempo, chords,
+ * patterns and hook.
  */
 const STYLES = {
-  house: {
-    label: ['Deep House', 'Piano House', 'Disco House', 'Tech House'],
-    bpm: [120, 126], mode: ['minor', 'minor', 'major'], root: [43, 50],
-    kick: ['x...x...x...x...'],
-    snare: ['................'],
-    clap: ['....x.......x...', '....x.......x..x'],
-    hat: ['xxxxxxxxxxxxxxxx', 'x.xxx.xxx.xxx.xx', '................'],
-    ohat: ['..x...x...x...x.'],
-    bass: ['..R...R...R...R.', '..R.R.oR..R.R.oR', 'R..R..R...R..R.o', '..Ro..R...Ro..R.'],
-    stab: ['..x...x...x..x..', 'x..x..x...x..x..', '...x..x....x..x.', 'x.....x.x.....x.'],
-    stabWave: ['triangle', 'square', 'sawtooth'],
-    arp: [false, false, 'up'], arpWave: ['triangle'], pad: ['sawtooth', 'triangle'], lead: [false, 'triangle', 'square'],
-    pump: [true], swing: [0.06, 0.1], bright: [0.55, 0.85],
+  // Misty city at night: echoing arpeggios over a rolling bass, broken beats, risers
+  vapor: {
+    label: ['Vapor Drive', 'Neon Fog', 'Night Circuit', 'Steam Grid'],
+    bpm: [124, 132], mode: ['minor'], root: [40, 47],
+    kick: ['x...x...x...x...', 'x.....x.x.......', 'x.....x...x.....'],
+    snare: ['....x.......x...', '....x.......x..x'],
+    hat: ['x.xxx.xxx.xxx.xx', '.x.x.x.x.x.x.x.x', 'xxxxxxxxxxxxxxxx'],
+    ohat: ['..x...x...x...x.', '................'],
+    bass: ['R.RR.RoRR.RR.RoR', 'R..R..R.R..R..Ro', 'RRoRRRoRRRoRRoRR'],
+    arp: ['updown', 'up', 'down'], arpWave: ['sawtooth', 'square'], pad: ['sawtooth'], lead: ['sawtooth', 'square', false],
+    acid: [false, '0..0o.3.0..5.3o.'], riff: [false, false, 'X.......X.......'],
+    echo: [0.35, 0.5], sweep: [true], bright: [0.5, 0.65],
   },
-  synthwave: {
-    label: ['Synthwave', 'Outrun', 'Night Drive'],
-    bpm: [100, 116], mode: ['minor'], root: [40, 47],
-    kick: ['x...x...x...x...', 'x.......x.x.....'], snare: ['....x.......x...'], hat: ['..x...x...x...x.', 'x.x.x.x.x.x.x.x.'],
-    bass: ['RRRRRRRRRRRRRRRR', 'R.RRR.RRR.RRR.RR', 'RoRoRoRoRoRoRoRo'],
-    arp: ['up', 'updown'], arpWave: ['sawtooth', 'square'], pad: ['sawtooth'], lead: ['sawtooth'], bright: [0.5, 0.7],
+  // Out in orbit: pumping four-on-the-floor, squelchy acid line, spacey echoes
+  space: {
+    label: ['Space Out', 'Orbit Run', 'Starfield', 'Zero-G'],
+    bpm: [132, 140], mode: ['minor', 'minor', 'major'], root: [45, 52],
+    kick: ['x...x...x...x...'], snare: ['................', '....x.......x...'], clap: ['....x.......x...'],
+    hat: ['..x...x...x...x.', 'x.x.x.x.x.x.x.x.'], ohat: ['..x...x...x...x.'],
+    bass: ['.RRR.RRR.RRR.RRR', '.RoR.RoR.RoR.RoR', '..R...R...R...R.'],
+    acid: ['0.0o.03.0.5.0o.3', '00.3.0o.0.30.o5.', '0..o0.3.0..o5.3.', '0o0.30o.0o0.5o3.'],
+    arp: ['up', 'updown'], arpWave: ['triangle', 'sawtooth'], pad: ['sawtooth'], lead: ['sawtooth', false],
+    riff: [false], echo: [0.45, 0.6], pump: [true], sweep: [true], bright: [0.65, 0.8],
   },
-  chiptune: {
-    label: ['Chiptune', '8-bit Rush', 'Arcade'],
-    bpm: [140, 160], mode: ['major', 'major', 'minor'], root: [50, 57],
-    kick: ['x...x...x...x...', 'x.x...x.x.x...x.'], snare: ['....x.......x...', '....x..x....x...'], hat: ['x.x.x.x.x.x.x.x.'],
-    bass: ['R.oRR.oRR.oRR.oR', 'RoRoRoRoRoRoRoRo'],
-    arp: ['up', 'updown', 'down'], arpWave: ['square'], pad: ['square', 'triangle'], lead: ['square'], bright: [0.8, 0.95],
-  },
-  trance: {
-    label: ['Trance', 'Euphoric Trance', 'Uplifting'],
-    bpm: [134, 140], mode: ['minor', 'major'], root: [45, 52],
-    kick: ['x...x...x...x...'], snare: ['....x.......x...'], hat: ['..x...x...x...x.'], ohat: ['..x...x...x...x.'],
-    bass: ['.RRR.RRR.RRR.RRR', '.RoR.RoR.RoR.RoR'],
-    arp: ['updown', 'up'], arpWave: ['sawtooth'], pad: ['sawtooth'], lead: ['sawtooth', 'square'], pump: [true], bright: [0.7, 0.9],
-  },
-  breakbeat: {
-    label: ['Drum & Bass', 'Breakbeat', 'Jungle'],
-    bpm: [168, 174], mode: ['minor'], root: [38, 45],
-    kick: ['x.........x.....', 'x.........x..x..'], snare: ['....x.......x...', '....x..x....x...'], hat: ['xxxxxxxxxxxxxxxx', 'x.xxx.xxx.xxx.xx'],
-    bass: ['R.......R.R.....', 'R...R.....R.R...'],
-    arp: [false, 'down'], arpWave: ['triangle'], pad: ['sawtooth', 'triangle'], lead: ['sawtooth', false], bright: [0.45, 0.65],
-  },
-  funk: {
-    label: ['Disco Funk', 'Funk Drive', 'Boogie'],
-    bpm: [112, 122], mode: ['major', 'minor'], root: [43, 50],
-    kick: ['x...x...x...x...'], snare: ['....x.......x...'], hat: ['x.x.x.x.x.x.x.x.'], ohat: ['..x...x...x...x.'],
-    bass: ['R.o.R.o.R.o.R.o.', 'R..oR.o.R..oR.oR'],
-    stab: ['..x.......x.....', '..x..x....x..x..'], stabWave: ['square', 'triangle'],
-    arp: [false, 'up'], arpWave: ['triangle'], pad: ['triangle'], lead: ['square', 'triangle'], swing: [0.04, 0.08], bright: [0.65, 0.85],
+  // Monster trucks off the leash: hard breakbeat, distorted guitar riffs
+  beasts: {
+    label: ['Road Beasts', 'Chrome Riot', 'Turbo Brawl', 'Iron Stampede'],
+    bpm: [138, 148], mode: ['minor'], root: [38, 45],
+    kick: ['x.x...x...x..x..', 'x..x..x...x..x..', 'x.x...x.x.x.....'],
+    snare: ['....x.......x...', '....x..x....x...', '....x.......x.x.'],
+    hat: ['x.x.x.x.x.x.x.x.', 'xxxxxxxxxxxxxxxx'], ohat: ['................', '......x.......x.'],
+    bass: ['R.RR.RR.R.RR.R..', 'RRoRRRoRRRoRRoRR', 'R.R.RRR.R.R.RR.R'],
+    riff: ['X..x.xx.X..x.x..', 'x.xxx.x.x.xxx.X.', 'X.x.x.X.x.x.X.xx', 'X...X.x.X...X.xx'],
+    arp: [false, 'down'], arpWave: ['square'], pad: ['sawtooth'], lead: ['square', 'sawtooth'],
+    acid: [false], stab: [false], echo: [0.15, 0.25], sweep: [true], bright: [0.55, 0.7],
   },
 };
 export const STYLE_IDS = Object.keys(STYLES);
@@ -131,33 +92,29 @@ export function randomSong(style = pick(Math.random, STYLE_IDS), seed = Math.flo
   const t = { id: `${style}-${seed}`, seed };
   for (const [k, v] of Object.entries(st)) {
     if (k === 'label') continue;
-    t[k] = typeof v[0] === 'number' && v.length === 2 && k !== 'mode' ? (Number.isInteger(v[0]) ? range(rng, v[0], v[1]) : v[0] + rng() * (v[1] - v[0])) : pick(rng, v);
+    t[k] = typeof v[0] === 'number' && v.length === 2 ? (Number.isInteger(v[0]) ? range(rng, v[0], v[1]) : v[0] + rng() * (v[1] - v[0])) : pick(rng, v);
   }
   t.prog = pick(rng, PROGS[t.mode]);
   t.label = `${pick(rng, st.label)} · ${NOTE_NAMES[t.root % 12]} ${t.mode} · ${t.bpm} BPM`;
   return t;
 }
 
-// Maps that always get house (a new house tune each time)
-const HOUSE_MAPS = ['gyro', 'skyline', 'chaos', 'twin', 'stadium'];
-
 /**
- * The soundtrack for a map: Neon Junction keeps its signature tune; house
- * maps get a fresh house song; everything else gets a random song in a
- * random style, new every time the map loads.
+ * The soundtrack for a map: Neon Junction keeps its signature tune; every
+ * other map (and the battle arenas) gets a fresh random song each time.
  */
 export function musicFor(mapId) {
   if (mapId === 'junction') return 'neon';
-  return randomSong(HOUSE_MAPS.includes(mapId) ? 'house' : undefined);
+  return randomSong();
 }
 
 // Song form: bars per section and which parts play
 const FORM = [
-  { bars: 4, parts: ['pad', 'arp', 'hat', 'stab'] },
-  { bars: 8, parts: ['pad', 'arp', 'hat', 'kick', 'snare', 'bass', 'ohat', 'clap'] },
-  { bars: 8, parts: ['pad', 'arp', 'hat', 'kick', 'snare', 'bass', 'lead', 'ohat', 'clap', 'stab'] },
-  { bars: 4, parts: ['pad', 'arp', 'bass', 'stab'] },
-  { bars: 8, parts: ['pad', 'arp', 'hat', 'kick', 'snare', 'bass', 'lead', 'ohat', 'clap', 'stab'] },
+  { bars: 4, parts: ['pad', 'arp', 'hat', 'acid'] },
+  { bars: 8, parts: ['pad', 'arp', 'hat', 'kick', 'snare', 'bass', 'ohat', 'clap', 'acid'] },
+  { bars: 8, parts: ['pad', 'arp', 'hat', 'kick', 'snare', 'bass', 'lead', 'ohat', 'clap', 'stab', 'riff', 'acid'] },
+  { bars: 4, parts: ['pad', 'arp', 'bass', 'acid'] },
+  { bars: 8, parts: ['pad', 'arp', 'hat', 'kick', 'snare', 'bass', 'lead', 'ohat', 'clap', 'stab', 'riff', 'acid'] },
 ];
 
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
@@ -183,6 +140,22 @@ export class Music {
     // Pads and stabs go through a bus that ducks on every kick (house "pump")
     this.pumpBus = ctx.createGain();
     this.pumpBus.connect(this.out);
+    // Echo send (a filtered, feeding-back delay) for the spacey arps, leads and acid
+    this.echoIn = ctx.createGain();
+    this.echo = ctx.createDelay(2);
+    const fb = ctx.createGain(), tone = ctx.createBiquadFilter();
+    fb.gain.value = 0.42;
+    tone.type = 'lowpass';
+    tone.frequency.value = 2600;
+    this.echoIn.connect(this.echo).connect(tone).connect(fb).connect(this.echo);
+    tone.connect(this.out);
+    // Distortion curve for the guitar
+    const n = 1024, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.tanh(x * 6) * 0.8;
+    }
+    this.fuzz = curve;
     this.track = null;
     this.timer = null;
     this.volume = 0.16;
@@ -199,6 +172,8 @@ export class Music {
     this.bar = 0;
     this.nextTime = this.ctx.currentTime + 0.1;
     this.layers = this.pendingLayers = null;
+    this.echo.delayTime.value = (60 / t.bpm) * 0.75; // dotted eighth
+    this.echoIn.gain.value = t.echo || 0;
     this.rng = seeded(t.seed ?? id.length * 977 + t.bpm);
     this.motif = this.makeMotif();
     const g = this.out.gain, now = this.ctx.currentTime;
@@ -280,6 +255,17 @@ export class Music {
       if (has('stab') && t.stab?.[s] === 'x') this.stab(time, chord, spb * 1.5);
       if (has('bass') && t.bass[s] !== '.') this.bass(time, chord[0] - 12 + (t.bass[s] === 'o' ? 12 : 0), spb * 0.9);
       if (has('pad') && s === 0) this.pad(time, chord, spb * 16);
+      if (has('riff') && t.riff && t.riff[s] !== '.') this.guitar(time, chord[0] - 12, t.riff[s] === 'X' ? spb * 3.5 : spb * 0.8, t.riff[s] === 'X');
+      if (has('acid') && t.acid && t.acid[s] !== '.') {
+        const c = t.acid[s];
+        const deg = t.prog[bar % t.prog.length] + (c === 'o' ? 7 : +c);
+        this.acid(time, this.scaleNote(deg, -1), spb * 0.9, s % 4 === 0);
+      }
+      // Riser into a section where the drums come in
+      if (t.sweep && s === 0 && !this.layers) {
+        const next = this.section(bar + 1);
+        if (next !== sec && next.parts.includes('kick') && !sec.parts.includes('riff') && next.parts.length > sec.parts.length) this.sweep(time, spb * 16);
+      }
       if (has('arp') && s % 2 === 0) {
         const tones = [...chord, chord[0] + 12, chord[1] + 12];
         const i = s / 2;
@@ -305,6 +291,70 @@ export class Music {
     g.gain.setValueAtTime(0.0001, time);
     g.gain.exponentialRampToValueAtTime(peak, time + a);
     g.gain.exponentialRampToValueAtTime(Math.max(sus, 0.0001), time + a + d);
+  }
+
+  /** Distorted power chord (root, fifth, octave): short chug or ringing hit. */
+  guitar(time, root, dur, accent) {
+    const ctx = this.ctx;
+    const f = ctx.createBiquadFilter(), sh = ctx.createWaveShaper(), hp = ctx.createBiquadFilter(), cab = ctx.createBiquadFilter(), g = ctx.createGain();
+    f.type = 'lowpass';
+    f.frequency.value = accent ? 2600 : 1400;
+    sh.curve = this.fuzz;
+    hp.type = 'highpass';
+    hp.frequency.value = 90;
+    cab.type = 'lowpass'; // speaker-cabinet roll-off
+    cab.frequency.value = 3800;
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.exponentialRampToValueAtTime(accent ? 0.075 : 0.06, time + 0.005);
+    g.gain.setValueAtTime(accent ? 0.07 : 0.05, time + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+    f.connect(sh).connect(hp).connect(cab).connect(g).connect(this.out);
+    for (const [st, det] of [[0, -6], [7, 5], [12, 0]]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = mtof(root + st);
+      o.detune.value = det;
+      o.connect(f);
+      o.start(time);
+      o.stop(time + dur + 0.05);
+    }
+  }
+
+  /** Squelchy acid line: resonant low-pass with a snappy envelope. */
+  acid(time, note, dur, accent) {
+    const ctx = this.ctx;
+    const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.value = mtof(note + 12);
+    f.type = 'lowpass';
+    f.Q.value = 14;
+    const top = (accent ? 2600 : 1500) * (0.6 + this.track.bright * 0.6);
+    f.frequency.setValueAtTime(top, time);
+    f.frequency.exponentialRampToValueAtTime(260, time + dur);
+    this.env(g, time, 0.003, accent ? 0.075 : 0.05, dur);
+    o.connect(f).connect(g);
+    g.connect(this.out);
+    g.connect(this.echoIn);
+    o.start(time);
+    o.stop(time + dur + 0.05);
+  }
+
+  /** Noise riser across a bar, into the next section. */
+  sweep(time, dur) {
+    const ctx = this.ctx;
+    const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = this.noise;
+    s.loop = true;
+    f.type = 'bandpass';
+    f.Q.value = 3;
+    f.frequency.setValueAtTime(300, time);
+    f.frequency.exponentialRampToValueAtTime(6000, time + dur);
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.exponentialRampToValueAtTime(0.09, time + dur * 0.95);
+    g.gain.linearRampToValueAtTime(0.0001, time + dur);
+    s.connect(f).connect(g).connect(this.out);
+    s.start(time);
+    s.stop(time + dur + 0.05);
   }
 
   kick(time) {
@@ -433,6 +483,7 @@ export class Music {
     f.frequency.value = 1200 + 2600 * this.track.bright;
     this.env(g, time, 0.004, 0.09, dur);
     o.connect(f).connect(g).connect(this.out);
+    g.connect(this.echoIn);
     o.start(time);
     o.stop(time + dur + 0.05);
   }
@@ -452,6 +503,7 @@ export class Music {
     g.gain.setValueAtTime(0.11, time + dur * 0.7);
     g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
     o.connect(f).connect(g).connect(this.out);
+    g.connect(this.echoIn);
     o.start(time);
     lfo.start(time);
     o.stop(time + dur + 0.05);

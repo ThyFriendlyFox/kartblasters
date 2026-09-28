@@ -10,17 +10,17 @@ Built with Three.js. Multiplayer is peer-to-peer over WebRTC (PeerJS) with no ga
 
 ## Menu
 
-The menu is a run of full-screen steps, like a console kart game:
+The menu is split into sections, one step at a time (a row of steps at the top shows where you are):
 
-1. **How do you want to play?** Solo (vs AI, offline), Host online, or Join a friend.
-2. **Select mode:** Race, Grand Prix or Battle.
-3. **Select your car:** name, car, colour (with its stat bars).
-4. **Select track / cup / arena** and the options below.
+1. **Play:** Solo (vs AI, offline), Host online, or Join a friend.
+2. **Mode:** Race, Grand Prix or Battle.
+3. **Car:** name, car, colour (with its stat bars).
+4. **Track / Cup / Arena** and the options below. Grand Prix cups are picked from medallion cards: 🏁 Classic, ⛰️ Epic, 🌈 Everything and 🎲 Random.
 5. **Lobby** (online): the room code and invite link, everyone who's joined with their car, the host's settings, and a START button for the host. Friends who join wait here; anyone can change car from the lobby. People who join after the race has started go straight in.
 
 Joining a friend goes: car → room code → lobby. Invite links (`?room=CODE`) skip to the car screen. Arrow keys move between choices, Esc goes back.
 
-The menu music builds as you go: pads on the first screen, then an arpeggio, bass and hats, the drums, and the full groove with a lead in the lobby (each new part comes in on the next bar).
+The menu music builds as you go: a pad on the first screen, then an arpeggio, bass and hats, the drums and acid line, and the full track with a guitar riff and lead in the lobby (each new part comes in on the next bar).
 
 ## Options
 
@@ -170,7 +170,7 @@ Take the jumps fast: if you come up short, you wipe out and respawn past the lan
   | Dice Rod | Rodded old-school V8 (low rumble) |
   | Soundbreaker | Twin jet (turbine whine and roar) |
 
-- **Music:** a procedurally generated soundtrack. Every time a map loads it gets a brand new random song (the style, key, tempo, chords, grooves and hook are all rolled fresh; a toast shows what's playing): house, synthwave, chiptune, trance, drum & bass or disco funk. Gyrosphere, Skyline Spiral, Chaos Crossing, Twin Peaks and the Stadium arena always get house (four-on-the-floor kick, claps, off-beat open hats, piano chord stabs and a pumping sidechained pad). Neon Junction keeps its own signature tune. Toggle music with the 🎵 checkbox in the menu or pause screen, or press **N**. **M** mutes everything.
+- **Music:** a procedurally generated soundtrack inspired by early-2000s arcade-racer electronica. Every time a map (or battle arena) loads it gets a brand new random song (the key, tempo, chords, grooves and hook are rolled fresh; a toast shows what's playing) in one of three styles: **Vapor** (misty city-at-night: echoing arpeggios over a rolling bass, broken beats and noise risers), **Space** (pumping four-on-the-floor, a squelchy acid line and spacey echoes) or **Beasts** (hard breakbeat drums and distorted power-chord guitar riffs). Neon Junction keeps its own signature tune. Toggle music with the 🎵 checkbox in the menu or pause screen, or press **N**. **M** mutes everything.
 
 ### Playing on a phone
 

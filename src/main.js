@@ -109,11 +109,36 @@ function refreshMode() {
   const prev = store.get(`kb-map-${mode}`, MAPS[mode][0][0]);
   $('map').innerHTML = MAPS[mode].map(([id, label]) => `<option value="${id}"${id === prev ? ' selected' : ''}>${label}</option>`).join('');
   $('mapLabel').textContent = { race: 'Track', gp: 'Cup', battle: 'Arena' }[mode];
+  // Grand Prix: pick a cup from big medallion cards instead of a dropdown
+  $('cupPick').classList.toggle('hidden', mode !== 'gp');
+  $('mapWrap').classList.toggle('hidden', mode === 'gp');
+  if (mode === 'gp') renderCups();
   showPreview();
   $('lapsWrap').classList.toggle('hidden', mode === 'battle');
   $('destructWrap').classList.toggle('hidden', mode !== 'battle');
   $('ctlRace').classList.toggle('hidden', mode === 'battle');
   $('ctlBattle').classList.toggle('hidden', mode !== 'battle');
+}
+const CUPS = {
+  classic: { icon: '🏁', name: 'Classic Cup', color: 'linear-gradient(145deg, #f0b27a, #b86b2d)' },
+  epic: { icon: '⛰️', name: 'Epic Cup', color: 'linear-gradient(145deg, #eef2f7, #8f9aa8)' },
+  all: { icon: '🌈', name: 'Everything Cup', color: 'linear-gradient(145deg, #ffe27a, #e0a410)' },
+  random: { icon: '🎲', name: 'Random Cup', color: 'linear-gradient(145deg, #c9a2ff, #6a3fd1)' },
+};
+function renderCups() {
+  const box = $('cupPick');
+  box.innerHTML = '';
+  for (const [id, c] of Object.entries(CUPS)) {
+    const b = document.createElement('button');
+    b.className = 'cupBtn' + ($('map').value === id ? ' on' : '');
+    b.innerHTML = `<span class="medal" style="--cup:${c.color}">${c.icon}</span><b>${c.name}</b><small>${id === 'random' ? '4 random tracks' : `${cupMaps(id).length} races`}</small>`;
+    b.onclick = () => {
+      $('map').value = id;
+      renderCups();
+      showPreview();
+    };
+    box.appendChild(b);
+  }
 }
 // Aerial shot of the selected map, rendered from the real map on demand
 function showPreview() {
@@ -218,18 +243,33 @@ const LAYERS = {
   start: ['pad'],
   mode: ['pad', 'arp'],
   car: ['pad', 'arp', 'bass', 'hat'],
-  track: ['pad', 'arp', 'bass', 'hat', 'kick', 'clap', 'ohat'],
-  code: ['pad', 'arp', 'bass', 'hat', 'kick', 'clap', 'ohat'],
-  lobby: ['pad', 'arp', 'bass', 'hat', 'kick', 'clap', 'ohat', 'snare', 'stab', 'lead'],
+  track: ['pad', 'arp', 'bass', 'hat', 'kick', 'snare', 'ohat', 'acid'],
+  code: ['pad', 'arp', 'bass', 'hat', 'kick', 'snare', 'ohat', 'acid'],
+  lobby: ['pad', 'arp', 'bass', 'hat', 'kick', 'snare', 'ohat', 'acid', 'riff', 'lead'],
 };
 const TITLES = { race: ['Select track', 'Track'], gp: ['Select cup', 'Cup'], battle: ['Select arena', 'Arena'] };
 let path = null; // 'solo' | 'host' | 'join'
 let screen = 'start';
 const trail = [];
 
+const STEPS = {
+  solo: ['start', 'mode', 'car', 'track'],
+  host: ['start', 'mode', 'car', 'track', 'lobby'],
+  join: ['start', 'car', 'code', 'lobby'],
+};
+const STEP_NAMES = { start: 'Play', mode: 'Mode', car: 'Car', code: 'Room code', lobby: 'Lobby' };
+function renderSteps() {
+  const list = STEPS[path] || ['start'];
+  const at = list.indexOf(screen);
+  $('steps').innerHTML = list
+    .map((st, i) => `<li class="${i === at ? 'on' : i < at ? 'done' : ''}">${i < at ? '✓ ' : ''}${st === 'track' ? { race: 'Track', gp: 'Cup', battle: 'Arena' }[mode] : STEP_NAMES[st]}</li>`)
+    .join('');
+}
+
 function show(name, push = true) {
   if (push && screen !== name) trail.push(screen);
   screen = name;
+  renderSteps();
   for (const sc of document.querySelectorAll('#menu .screen')) sc.classList.toggle('on', sc.dataset.screen === name);
   $('back').classList.toggle('hidden', name === 'start');
   if (name === 'start') {
